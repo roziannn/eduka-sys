@@ -167,7 +167,7 @@ export default function RombelEnrollmentPage() {
     <div className="space-y-6 w-full">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-         Rombongan Belajar & Enrollment
+          <Users className="h-6 w-6 text-primary" /> Rombongan Belajar & Enrollment
         </h1>
         <p className="text-sm text-muted-foreground">Kelola struktur rombel dan plotting siswa ke dalam kelas.</p>
       </div>
@@ -220,7 +220,11 @@ export default function RombelEnrollmentPage() {
                       <TableRow key={item.id}>
                         <TableCell>{i + 1}</TableCell>
                         <TableCell className="font-bold">{item.namaRombel}</TableCell>
-                        <TableCell><Badge variant="outline">{item.tingkat}</Badge></TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="font-bold">
+                            {item.tingkat}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{item.waliKelas || "-"}</TableCell>
                         <TableCell>{item.ruangan}</TableCell>
                         <TableCell>
@@ -234,15 +238,11 @@ export default function RombelEnrollmentPage() {
                         </TableCell>
                         <TableCell className="text-sm">{item.tahunAjaran}</TableCell>
                         <TableCell>
-                          {item.isAktif ? (
-                            <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 border-emerald-200">
-                              Aktif
+                          <div className="flex items-center gap-2">
+                            <Badge variant={item.isAktif ? "default" : "outline"} className={item.isAktif ? "bg-emerald-600" : ""}>
+                              {item.isAktif ? "Aktif" : "Tidak Aktif"}
                             </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-muted-foreground">
-                              Tidak Aktif
-                            </Badge>
-                          )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right space-x-1">
                           <Button variant="outline" size="sm" onClick={() => handleOpenRombelModal(item)}>
@@ -422,10 +422,10 @@ export default function RombelEnrollmentPage() {
           <form onSubmit={handleSaveRombel} className="space-y-4">
             <DialogHeader>
               <DialogTitle>{editRombel ? "Edit" : "Tambah"} Rombongan Belajar</DialogTitle>
-              <DialogDescription>Pengaturan unit kelas dan batas kapasitas siswa.</DialogDescription>
+              <DialogDescription>Penugasan unit kelas dan batas kapasitas siswa.</DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-3 py-2">
+            <div className="space-y-4 py-2">
               <div className="grid gap-2">
                 <Label htmlFor="namaRombel">Nama Rombel</Label>
                 <Input
@@ -489,22 +489,21 @@ export default function RombelEnrollmentPage() {
                 <Label htmlFor="tahunAjaran">Tahun Ajaran</Label>
                 <Input
                   id="tahunAjaran"
+                  placeholder="Contoh: 2025/2026"
                   value={rombelForm.tahunAjaran}
                   onChange={(e) => setRombelForm({ ...rombelForm, tahunAjaran: e.target.value })}
                   required
                 />
               </div>
 
-              {/* Toggle Status Aktif */}
-              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                <div className="space-y-0.5">
-                  <Label htmlFor="isAktif" className="text-sm font-medium">Status Rombel</Label>
-                  <p className="text-xs text-muted-foreground">Rombel aktif dapat dipilih pada menu plotting.</p>
-                </div>
+              <div className="flex items-center justify-between pt-2">
+                <Label htmlFor="isAktif" className="cursor-pointer">
+                  Status Keaktifan
+                </Label>
                 <Switch
                   id="isAktif"
                   checked={rombelForm.isAktif}
-                  onCheckedChange={(checked) => setRombelForm({ ...rombelForm, isAktif: checked })}
+                  onCheckedChange={(v) => setRombelForm({ ...rombelForm, isAktif: v })}
                 />
               </div>
             </div>
@@ -513,7 +512,9 @@ export default function RombelEnrollmentPage() {
               <Button type="button" variant="outline" onClick={() => setOpenRombelModal(false)}>
                 Batal
               </Button>
-              <Button type="submit">Simpan Rombel</Button>
+              <Button type="submit">
+                Simpan
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
