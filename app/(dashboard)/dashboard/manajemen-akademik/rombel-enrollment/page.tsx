@@ -272,7 +272,7 @@ export default function RombelEnrollmentPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border bg-card">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Target Rombongan Belajar</Label>
-              <Select value={selectedRombelFilter} onValueChange={setSelectedRombelFilter}>
+              <Select value={selectedRombelFilter}>
                 <SelectTrigger className="w-[240px] font-bold">
                   <SelectValue placeholder="Pilih Rombel" />
                 </SelectTrigger>
@@ -442,7 +442,6 @@ export default function RombelEnrollmentPage() {
                   <Label htmlFor="tingkat">Tingkat</Label>
                   <Select
                     value={rombelForm.tingkat}
-                    onValueChange={(val) => setRombelForm({ ...rombelForm, tingkat: val })}
                   >
                     <SelectTrigger id="tingkat"><SelectValue /></SelectTrigger>
                     <SelectContent>

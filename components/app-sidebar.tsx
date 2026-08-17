@@ -68,6 +68,10 @@ const data = {
           title: "Data Pengguna",
           url: "/dashboard/master/data-pengguna",
         },
+         {
+          title: "Template Rapor",
+          url: "/dashboard/master/template-rapor",
+        },
       ],
     },
     {
@@ -90,75 +94,71 @@ const data = {
       ],
     },
     {
-      title: "Bank Soal",
-      url: "#",
-      icon: <HelpCircleIcon />,
-      items: [
-        {
-          title: "Daftar Soal",
-          url: "/dashboard/bank-soal",
-        },
-        {
-          title: "Kategori & Topik",
-          url: "/dashboard/bank-soal/kategori",
-        },
-      ],
-    },
+    title: "Ujian & Kuis",
+    url: "#",
+    icon: <FileCheck2Icon />,
+    items: [
+      {
+        title: "Soal Ujian",
+        url: "/dashboard/ujian/soal",
+      },
+       {
+        title: "Soal Kuis",
+        url: "/dashboard/ujian/kuis",
+      },
+      {
+        title: "Jadwal UTS & UAS",
+        url: "/dashboard/ujian/jadwal-uts-uas",
+      },
+      {
+        title: "Jadwal Kuis Harian",
+        url: "/dashboard/ujian/jadwal-kuis",
+      },
+      {
+        title: "Koreksi UTS & UAS",
+        url: "/dashboard/ujian/koreksi-uts-uas",
+      },
+      {
+        title: "Koreksi Kuis",
+        url: "/dashboard/ujian/koreksi-kuis",
+      },
+    ],
+  },
     {
-      title: "Ujian & Kuis",
-      url: "#",
-      icon: <FileCheck2Icon />,
-      items: [
-        {
-          title: "Jadwal Ujian",
-          url: "/dashboard/ujian",
-        },
-        {
-          title: "Koreksi Essay",
-          url: "/dashboard/ujian/koreksi",
-        },
-      ],
-    },
-    {
-      title: "Absensi Guru & Mapel",
-      url: "/dashboard/absensi",
-      icon: <UserCheckIcon />,
-    },
-    {
-      title: "Rapor & Nilai",
-      url: "/dashboard/rapor",
+      title: "Rapor Siswa",
+      url: "/dashboard/rapor-siswa",
       icon: <FileTextIcon />,
     },
   ],
   // Shortcut Menu Cepat
   projects: [
-    {
-      name: "Jadwal Mengajar",
-      url: "/dashboard/jadwal",
-      icon: <CalendarDaysIcon />,
-    },
-    {
-      name: "Rekap Kehadiran",
-      url: "/dashboard/rekap-absensi",
-      icon: <ClipboardListIcon />,
-    },
-    {
-      name: "Panduan Penggunaan",
-      url: "/dashboard/panduan",
-      icon: <BookOpenIcon />,
-    },
+    // {
+    //   name: "Jadwal Mengajar",
+    //   url: "/dashboard/jadwal",
+    //   icon: <CalendarDaysIcon />,
+    // },
+    // {
+    //   name: "Rekap Kehadiran",
+    //   url: "/dashboard/rekap-absensi",
+    //   icon: <ClipboardListIcon />,
+    // },
+    // {
+    //   name: "Panduan Penggunaan",
+    //   url: "/dashboard/panduan",
+    //   icon: <BookOpenIcon />,
+    // },
   ],
   navSecondary: [
-    {
-      title: "Bantuan",
-      url: "#",
-      icon: <LifeBuoyIcon />,
-    },
-    {
-      title: "Kirim Masukan",
-      url: "#",
-      icon: <SendIcon />,
-    },
+    // {
+    //   title: "Bantuan",
+    //   url: "#",
+    //   icon: <LifeBuoyIcon />,
+    // },
+    // {
+    //   title: "Kirim Masukan",
+    //   url: "#",
+    //   icon: <SendIcon />,
+    // },
   ],
 }
 
