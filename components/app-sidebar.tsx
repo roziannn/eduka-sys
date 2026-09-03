@@ -74,25 +74,25 @@ const data = {
         },
       ],
     },
-    {
-      title: "Manajemen Akademik",
-      url: "#",
-      icon: <GraduationCapIcon />,
-      items: [
-        {
-          title: "Penugasan Guru",
-          url: "/dashboard/manajemen-akademik/penugasan-guru",
-        },
-        {
-          title: "Rombel & Enrollment",
-          url: "/dashboard/manajemen-akademik/rombel-enrollment",
-        },
-        {
-          title: "Wali Kelas",
-          url: "/dashboard/manajemen-akademik/wali-kelas",
-        },
-      ],
-    },
+    // {
+    //   title: "Manajemen Akademik",
+    //   url: "#",
+    //   icon: <GraduationCapIcon />,
+    //   items: [
+    //     {
+    //       title: "Penugasan Guru",
+    //       url: "/dashboard/manajemen-akademik/penugasan-guru",
+    //     },
+    //     {
+    //       title: "Rombel & Enrollment",
+    //       url: "/dashboard/manajemen-akademik/rombel-enrollment",
+    //     },
+    //     {
+    //       title: "Wali Kelas",
+    //       url: "/dashboard/manajemen-akademik/wali-kelas",
+    //     },
+    //   ],
+    // },
     {
     title: "Ujian & Kuis",
     url: "#",
@@ -100,7 +100,7 @@ const data = {
     items: [
       {
         title: "Soal Ujian",
-        url: "/dashboard/ujian/soal",
+        url: "/dashboard/soal-ujian",
       },
        {
         title: "Soal Kuis",
@@ -124,11 +124,11 @@ const data = {
       },
     ],
   },
-    {
-      title: "Rapor Siswa",
-      url: "/dashboard/rapor-siswa",
-      icon: <FileTextIcon />,
-    },
+    // {
+    //   title: "Rapor Siswa",
+    //   url: "/dashboard/rapor-siswa",
+    //   icon: <FileTextIcon />,
+    // },
   ],
   // Shortcut Menu Cepat
   projects: [
