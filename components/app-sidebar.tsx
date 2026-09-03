@@ -69,7 +69,7 @@ const data = {
           url: "/dashboard/master/data-pengguna",
         },
          {
-          title: "Template Rapor",
+          title: "Template e-Rapor",
           url: "/dashboard/master/template-rapor",
         },
       ],
@@ -94,7 +94,7 @@ const data = {
     //   ],
     // },
     {
-    title: "Ujian & Kuis",
+    title: "Ujian dan Kuis",
     url: "#",
     icon: <FileCheck2Icon />,
     items: [
@@ -106,16 +106,16 @@ const data = {
         title: "Soal Kuis",
         url: "/dashboard/ujian/kuis",
       },
+      // {
+      //   title: "Jadwal UTS & UAS",
+      //   url: "/dashboard/ujian/jadwal-uts-uas",
+      // },
+      // {
+      //   title: "Jadwal Kuis Harian",
+      //   url: "/dashboard/ujian/jadwal-kuis",
+      // },
       {
-        title: "Jadwal UTS & UAS",
-        url: "/dashboard/ujian/jadwal-uts-uas",
-      },
-      {
-        title: "Jadwal Kuis Harian",
-        url: "/dashboard/ujian/jadwal-kuis",
-      },
-      {
-        title: "Koreksi UTS & UAS",
+        title: "Koreksi Ujian",
         url: "/dashboard/ujian/koreksi-uts-uas",
       },
       {
@@ -180,7 +180,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-bold text-foreground">Eduka</span>
-                <span className="truncate text-xs text-muted-foreground">LMS & Academic</span>
+                <span className="truncate text-xs text-muted-foreground">LMS dan CBT</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
