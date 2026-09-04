@@ -104,7 +104,7 @@ const data = {
       },
        {
         title: "Soal Kuis",
-        url: "/dashboard/ujian/kuis",
+        url: "/dashboard/soal-kuis",
       },
       // {
       //   title: "Jadwal UTS & UAS",

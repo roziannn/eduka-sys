@@ -180,7 +180,7 @@ export default function CreateUjianPage() {
   }
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 space-y-6">
+    <div className="space-y-6">
       {/* Header & Navigasi */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
         <div className="flex items-center gap-3">
@@ -198,6 +198,7 @@ export default function CreateUjianPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* TOMBOL MEMBUKA HALAMAN PREVIEW */}
           <Button variant="outline" onClick={handleOpenPreviewPage}>
             <Eye className="mr-2 h-4 w-4" /> Preview Soal
           </Button>
@@ -229,13 +230,12 @@ export default function CreateUjianPage() {
                 />
               </div>
 
-              {/* SEBARIS TIGA FIELD YANG DIRAPIKAN DENGAN FLEX & PROPORSI PAS */}
-              <div className="flex items-center gap-2">
-                {/* Mata Pelajaran mengambil sisa ruang paling besar */}
-                <div className="grid gap-2 flex-1 min-w-0">
-                  <Label className="truncate">Mata Pelajaran</Label>
+              {/* SEBARIS TIGA FIELD */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid gap-2">
+                  <Label>Mata Pelajaran</Label>
                   <Select value={mataPelajaran} onValueChange={(v) => v && setMataPelajaran(v)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger>
                       <SelectValue placeholder="Pilih Mapel" />
                     </SelectTrigger>
                     <SelectContent>
@@ -248,11 +248,10 @@ export default function CreateUjianPage() {
                   </Select>
                 </div>
 
-                {/* Jenis Ujian dengan lebar tetap pas */}
-                <div className="grid gap-2 w-[90px] shrink-0">
-                  <Label className="whitespace-nowrap">Jenis</Label>
+                <div className="grid gap-2">
+                  <Label>Jenis Ujian</Label>
                   <Select value={jenisUjian} onValueChange={(v) => v && setJenisUjian(v)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -265,11 +264,10 @@ export default function CreateUjianPage() {
                   </Select>
                 </div>
 
-                {/* Target Kelas dengan lebar tetap pas */}
-                <div className="grid gap-2 w-[110px] shrink-0">
-                  <Label className="whitespace-nowrap">Target Kelas</Label>
+                <div className="grid gap-2">
+                  <Label>Target Kelas</Label>
                   <Select value={kelas} onValueChange={(v) => v && setKelas(v)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -354,6 +352,7 @@ export default function CreateUjianPage() {
             </div>
           </div>
 
+          {/* ACCORDION CONTAINER DENGAN TYPE CASTING TS SAFE */}
           <div className="max-h-[calc(100vh-180px)] overflow-y-auto pr-2 space-y-4 rounded-md">
             <Accordion
               {...({

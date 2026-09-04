@@ -9,7 +9,7 @@ import {
   Trash2,
   HelpCircle,
   CheckCircle2,
-  BookOpen,
+  HelpCircleIcon,
   Eye,
 } from "lucide-react"
 
@@ -44,23 +44,19 @@ interface SoalItem {
 }
 
 const listMapel = ["Matematika", "Bahasa Indonesia", "Bahasa Inggris", "Fisika", "Kimia", "Biologi"]
-const listJenisUjian = ["UH", "UTS", "UAS", "US"]
-const listKelas = ["X IPA 1", "X IPS 1", "XI IPA 2", "XII IPA 1"]
+const listTingkat = ["X", "XI", "XII"] as const
 
-export default function CreateUjianPage() {
+export default function CreateKuisPage() {
   const router = useRouter()
 
-  // --- STATE UJIAN ---
-  const [namaUjian, setNamaUjian] = React.useState("")
+  // --- STATE KUIS ---
+  const [judulKuis, setJudulKuis] = React.useState("")
+  const [deskripsi, setDeskripsi] = React.useState("")
   const [mataPelajaran, setMataPelajaran] = React.useState(listMapel[0])
-  const [jenisUjian, setJenisUjian] = React.useState("UTS")
-  const [kelas, setKelas] = React.useState(listKelas[0])
-  const [tahunAjaran, setTahunAjaran] = React.useState("2025/2026")
-  const [semester, setSemester] = React.useState("Genap")
-  const [durasiMenit, setDurasiMenit] = React.useState(90)
-  const [kkm, setKkm] = React.useState(75)
+  const [tingkat, setTingkat] = React.useState<(typeof listTingkat)[number]>("X")
+  const [durasiMenit, setDurasiMenit] = React.useState(15)
   const [acakSoal, setAcakSoal] = React.useState(true)
-  const [tampilkanHasil, setTampilkanHasil] = React.useState(false)
+  const [tampilkanHasil, setTampilkanHasil] = React.useState(true)
 
   // --- STATE ACCORDION TERBUKA ---
   const [openItems, setOpenItems] = React.useState<string[]>(["s-1"])
@@ -81,7 +77,7 @@ export default function CreateUjianPage() {
     },
   ])
 
-  // Total Bobot Keseluruhan
+  // Total Poin Keseluruhan
   const totalBobot = React.useMemo(() => {
     return soalList.reduce((acc, curr) => acc + (Number(curr.bobot) || 0), 0)
   }, [soalList])
@@ -143,30 +139,24 @@ export default function CreateUjianPage() {
 
   const handleOpenPreviewPage = () => {
     const previewData = {
-      namaUjian,
+      judulKuis,
+      deskripsi,
       mataPelajaran,
-      jenisUjian,
-      kelas,
-      tahunAjaran,
-      semester,
+      tingkat,
       durasiMenit,
-      kkm,
       soalList,
     }
-    sessionStorage.setItem("previewUjianData", JSON.stringify(previewData))
-    window.open("/dashboard/soal-ujian/create/preview-soal", "_blank")
+    sessionStorage.setItem("previewKuisData", JSON.stringify(previewData))
+    window.open("/dashboard/soal-kuis/create/preview-soal", "_blank")
   }
 
-  const handleSave = (status: "Draft" | "Siap Ujian") => {
+  const handleSave = (status: "Draft" | "Dipublikasikan") => {
     const payload = {
-      namaUjian,
+      judulKuis,
+      deskripsi,
       mataPelajaran,
-      jenisUjian,
-      kelas,
-      tahunAjaran,
-      semester,
+      tingkat,
       durasiMenit,
-      kkm,
       acakSoal,
       tampilkanHasil,
       status,
@@ -175,8 +165,8 @@ export default function CreateUjianPage() {
       soalList,
     }
 
-    console.log("Saving Ujian Payload:", payload)
-    router.push("/dashboard/soal-ujian")
+    console.log("Saving Kuis Payload:", payload)
+    router.push("/dashboard/soal-kuis")
   }
 
   return (
@@ -189,51 +179,61 @@ export default function CreateUjianPage() {
           </Button>
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
-              <BookOpen className="h-5 w-5" /> Buat Paket Ujian Baru
+              <HelpCircleIcon className="h-5 w-5" /> Buat Kuis Baru
             </h1>
             <p className="text-sm text-muted-foreground">
-              Lengkapi konfigurasi ujian dan tambahkan butir soal awal.
+              Atur informasi kuis dan buat daftar pertanyaan latihan.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleOpenPreviewPage}>
-            <Eye className="mr-2 h-4 w-4" /> Preview Soal
+            <Eye className="mr-2 h-4 w-4" /> Preview Kuis
           </Button>
           <Button variant="outline" onClick={() => handleSave("Draft")}>
             <Save className="mr-2 h-4 w-4" /> Simpan Draft
           </Button>
-          <Button onClick={() => handleSave("Siap Ujian")}>
-            <CheckCircle2 className="mr-2 h-4 w-4" /> Terbitkan Ujian
+          <Button onClick={() => handleSave("Dipublikasikan")}>
+            <CheckCircle2 className="mr-2 h-4 w-4" /> Publikasikan Kuis
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Kolom Kiri: Sticky Card */}
+        {/* Kolom Kiri: Sticky Card Pengaturan Kuis */}
         <div className="lg:col-span-1 lg:sticky lg:top-6 self-start space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Informasi & Pengaturan Ujian</CardTitle>
-              <CardDescription>Pengaturan dasar identitas, aturan waktu, dan KKM peserta.</CardDescription>
+              <CardTitle className="text-lg">Informasi Kuis</CardTitle>
+              <CardDescription>Atur identitas mata pelajaran, kelas, dan durasi pengerjaan.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="namaUjian">Nama Ujian</Label>
+                <Label htmlFor="judulKuis">Judul Kuis</Label>
                 <Input
-                  id="namaUjian"
-                  placeholder="Contoh: UTS Matematika Wajib X"
-                  value={namaUjian}
-                  onChange={(e) => setNamaUjian(e.target.value)}
+                  id="judulKuis"
+                  placeholder="Contoh: Kuis Matematika - Persamaan Kuadrat"
+                  value={judulKuis}
+                  onChange={(e) => setJudulKuis(e.target.value)}
                 />
               </div>
 
-              {/* SEBARIS TIGA FIELD YANG DIRAPIKAN DENGAN FLEX & PROPORSI PAS */}
-              <div className="flex items-center gap-2">
-                {/* Mata Pelajaran mengambil sisa ruang paling besar */}
-                <div className="grid gap-2 flex-1 min-w-0">
-                  <Label className="truncate">Mata Pelajaran</Label>
+              <div className="grid gap-2">
+                <Label htmlFor="deskripsi">Deskripsi Kuis (Opsional)</Label>
+                <Textarea
+                  id="deskripsi"
+                  placeholder="Instruksi singkat pengerjaan kuis..."
+                  value={deskripsi}
+                  onChange={(e) => setDeskripsi(e.target.value)}
+                  className="min-h-[70px]"
+                />
+              </div>
+
+              {/* MAPEL & KELAS */}
+              <div className="flex items-center gap-3">
+                <div className="grid gap-2 flex-1">
+                  <Label>Mata Pelajaran</Label>
                   <Select value={mataPelajaran} onValueChange={(v) => v && setMataPelajaran(v)}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Pilih Mapel" />
@@ -248,34 +248,19 @@ export default function CreateUjianPage() {
                   </Select>
                 </div>
 
-                {/* Jenis Ujian dengan lebar tetap pas */}
-                <div className="grid gap-2 w-[90px] shrink-0">
-                  <Label className="whitespace-nowrap">Jenis</Label>
-                  <Select value={jenisUjian} onValueChange={(v) => v && setJenisUjian(v)}>
+                <div className="grid gap-2 w-[120px] shrink-0">
+                  <Label className="whitespace-nowrap">Kelas / Tingkat</Label>
+                  <Select
+                    value={tingkat}
+                    onValueChange={(v) => v && setTingkat(v as (typeof listTingkat)[number])}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {listJenisUjian.map((j) => (
-                        <SelectItem key={j} value={j}>
-                          {j}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Target Kelas dengan lebar tetap pas */}
-                <div className="grid gap-2 w-[110px] shrink-0">
-                  <Label className="whitespace-nowrap">Target Kelas</Label>
-                  <Select value={kelas} onValueChange={(v) => v && setKelas(v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {listKelas.map((k) => (
-                        <SelectItem key={k} value={k}>
-                          {k}
+                      {listTingkat.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          Kelas {t}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -283,37 +268,16 @@ export default function CreateUjianPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="tahun">Tahun Ajaran</Label>
-                  <Input id="tahun" value={tahunAjaran} onChange={(e) => setTahunAjaran(e.target.value)} />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="semester">Semester</Label>
-                  <Input id="semester" value={semester} onChange={(e) => setSemester(e.target.value)} />
-                </div>
-              </div>
-
-              {/* DURASI DAN KKM */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                <div className="grid gap-2">
-                  <Label htmlFor="durasi">Durasi (Menit)</Label>
-                  <Input
-                    id="durasi"
-                    type="number"
-                    value={durasiMenit}
-                    onChange={(e) => setDurasiMenit(Number(e.target.value))}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="kkm">Nilai KKM</Label>
-                  <Input
-                    id="kkm"
-                    type="number"
-                    value={kkm}
-                    onChange={(e) => setKkm(Number(e.target.value))}
-                  />
-                </div>
+              {/* DURASI */}
+              <div className="grid gap-2 pt-2 border-t">
+                <Label htmlFor="durasi">Durasi Pengerjaan (Menit)</Label>
+                <Input
+                  id="durasi"
+                  type="number"
+                  min={1}
+                  value={durasiMenit}
+                  onChange={(e) => setDurasiMenit(Number(e.target.value))}
+                />
               </div>
 
               {/* SWITCH ATURAN */}
@@ -321,7 +285,7 @@ export default function CreateUjianPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Acak Urutan Soal</Label>
-                    <p className="text-xs text-muted-foreground">Tampilan nomor soal diacak antar peserta.</p>
+                    <p className="text-xs text-muted-foreground">Urutan soal diacak untuk tiap peserta.</p>
                   </div>
                   <Switch checked={acakSoal} onCheckedChange={setAcakSoal} />
                 </div>
@@ -329,7 +293,7 @@ export default function CreateUjianPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Tampilkan Hasil Langsung</Label>
-                    <p className="text-xs text-muted-foreground">Siswa dapat melihat nilai begitu selesai.</p>
+                    <p className="text-xs text-muted-foreground">Siswa dapat melihat skor setelah selesai.</p>
                   </div>
                   <Switch checked={tampilkanHasil} onCheckedChange={setTampilkanHasil} />
                 </div>
@@ -338,18 +302,18 @@ export default function CreateUjianPage() {
           </Card>
         </div>
 
-        {/* Kolom Kanan: Scrollable Area untuk Soal */}
+        {/* Kolom Kanan: Scrollable Area untuk Soal Kuis */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 bg-background z-10 py-2">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <HelpCircle className="h-5 w-5" /> Daftar Butir Soal ({soalList.length})
+              <HelpCircle className="h-5 w-5" /> Pertanyaan Kuis ({soalList.length})
             </h2>
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={() => handleAddSoal("Pilihan Ganda")}>
                 <Plus className="mr-1 h-3.5 w-3.5" /> PG Baru
               </Button>
               <Button size="sm" variant="secondary" onClick={() => handleAddSoal("Essai")}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Essai Baru
+                <Plus className="mr-1 h-3.5 w-3.5" /> Isian / Essai
               </Button>
             </div>
           </div>
@@ -372,7 +336,7 @@ export default function CreateUjianPage() {
                   <div className="flex items-center justify-between w-full">
                     <AccordionTrigger className="hover:no-underline py-3 flex-1">
                       <div className="flex items-center gap-2 text-left">
-                        <Badge variant="outline">Nomor {sIdx + 1}</Badge>
+                        <Badge variant="outline">No. {sIdx + 1}</Badge>
                         <Badge>{soal.tipe}</Badge>
                         <span className="text-sm font-normal text-muted-foreground line-clamp-1 max-w-[150px] sm:max-w-[240px]">
                           {soal.pertanyaan || "Pertanyaan belum diisi..."}
@@ -383,7 +347,7 @@ export default function CreateUjianPage() {
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md border">
                         <Label htmlFor={`bobot-${soal.id}`} className="text-xs text-muted-foreground whitespace-nowrap">
-                          Bobot:
+                          Poin:
                         </Label>
                         <Input
                           id={`bobot-${soal.id}`}
@@ -417,7 +381,7 @@ export default function CreateUjianPage() {
                     <div className="grid gap-2 pt-1 px-1">
                       <Label>Pertanyaan Soal</Label>
                       <Textarea
-                        placeholder="Tuliskan pertanyaan soal di sini..."
+                        placeholder="Tuliskan pertanyaan kuis di sini..."
                         value={soal.pertanyaan}
                         onChange={(e) => handleUpdateSoalPertanyaan(sIdx, e.target.value)}
                         className="min-h-[90px]"
