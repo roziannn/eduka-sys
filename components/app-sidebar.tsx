@@ -115,12 +115,12 @@ const data = {
       //   url: "/dashboard/ujian/jadwal-kuis",
       // },
       {
-        title: "Koreksi Ujian",
-        url: "/dashboard/ujian/koreksi-uts-uas",
+        title: "Hasil Ujian",
+        url: "/dashboard/hasil-ujian",
       },
       {
-        title: "Koreksi Kuis",
-        url: "/dashboard/ujian/koreksi-kuis",
+        title: "Hasil Kuis",
+        url: "/dashboard/hasil-kuis",
       },
     ],
   },
