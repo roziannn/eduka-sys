@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { toast } from "sonner"
-import { Plus, KeyRound, Search, Shield, GraduationCap, UserCheck, CheckCircle2, XCircle, Mail, ChevronLeft, ChevronRight, Edit2, Loader2 } from "lucide-react"
+import { Plus, KeyRound, Search, Shield, GraduationCap, UserCheck, CheckCircle2, XCircle, Mail, ChevronLeft, ChevronRight, Loader2, Edit } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -248,7 +248,7 @@ const handleSaveResetPassword = async () => {
                         <KeyRound className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit Pengguna" onClick={() => handleOpenEditUser(user)}>
-                        <Edit2 className="h-4 w-4" />
+                        <Edit className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
