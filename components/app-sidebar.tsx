@@ -31,6 +31,8 @@ import {
   UsersIcon,
   UserCheckIcon,
   SparklesIcon,
+  Settings2,
+  Leaf,
 } from "lucide-react"
 
 const data = {
@@ -124,6 +126,21 @@ const data = {
       },
     ],
   },
+  {
+    title: "Pengaturan",
+    url: "#",
+    icon: <Settings2 />,
+    items: [
+      {
+        title: "Menu Aplikasi",
+        url: "/pengaturan/menu-aplikasi",
+      },
+       {
+        title: "Hak Akses",
+        url: "/pengaturan/hak-akses",
+      },
+    ],
+  },
     // {
     //   title: "Rapor Siswa",
     //   url: "/dashboard/rapor-siswa",
@@ -168,15 +185,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<a href="/dashboard" />}>
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Image
-                  src="/logo/eduka.png"
-                  alt="Eduka"
-                  width={24}
-                  height={24}
-                  className="h-5 w-auto object-contain"
-                />
+           <SidebarMenuButton size="lg" render={<a href="/dashboard" />}>
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
+                <Leaf className="size-5 fill-blue-500/20" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-bold text-foreground">Eduka</span>
@@ -189,7 +200,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        {/* <NavProjects projects={data.projects} /> */}
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
 

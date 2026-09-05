@@ -5,7 +5,6 @@ import Link from "next/link"
 import {
   ChevronLeft,
   ChevronRight,
-  Pencil,
   Plus,
   Printer,
   ArrowUpDown,
@@ -21,15 +20,13 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
 
 // --- TYPES ---
 interface SoalKuis {
   id: string
   judulKuis: string
   mataPelajaran: string
-  tingkat: "X" | "XI" | "XII"
+  distribusiKelas: string
   jumlahSoal: number
   durasiMenit: number
   token: string
@@ -45,18 +42,18 @@ interface PesertaKuis {
 }
 
 const initialKuisData: SoalKuis[] = [
-  { id: "k-1", judulKuis: "Kuis Matematika - Aljabar", mataPelajaran: "Matematika", tingkat: "X", jumlahSoal: 15, durasiMenit: 30, token: "MTK10X", status: "Dipublikasikan" },
-  { id: "k-2", judulKuis: "Kuis Fisika - Hukum Newton", mataPelajaran: "Fisika", tingkat: "XI", jumlahSoal: 20, durasiMenit: 45, token: "FSK11Z", status: "Draft" },
-  { id: "k-3", judulKuis: "Kuis B. Indonesia - Teks LHO", mataPelajaran: "Bahasa Indonesia", tingkat: "X", jumlahSoal: 10, durasiMenit: 20, token: "BIND10", status: "Selesai" },
+  { id: "k-1", judulKuis: "Kuis Matematika - Aljabar", mataPelajaran: "Matematika", distribusiKelas: "X IPA, X IPS", jumlahSoal: 15, durasiMenit: 30, token: "MTK10X", status: "Dipublikasikan" },
+  { id: "k-2", judulKuis: "Kuis Fisika - Hukum Newton", mataPelajaran: "Fisika", distribusiKelas: "XI IPA", jumlahSoal: 20, durasiMenit: 45, token: "FSK11Z", status: "Draft" },
+  { id: "k-3", judulKuis: "Kuis B. Indonesia - Teks LHO", mataPelajaran: "Bahasa Indonesia", distribusiKelas: "X IPS", jumlahSoal: 10, durasiMenit: 20, token: "BIND10", status: "Selesai" },
 ]
 
 export default function SoalKuisPage() {
-  const [kuisData, setKuisData] = React.useState<SoalKuis[]>(initialKuisData)
+  const [kuisData] = React.useState<SoalKuis[]>(initialKuisData)
   const [selectedKuis, setSelectedKuis] = React.useState<SoalKuis | null>(null)
-  const [pesertaList, setPesertaList] = React.useState<PesertaKuis[]>([])
+  const [pesertaList] = React.useState<PesertaKuis[]>([])
 
   // Filter & Search States
-  const [filterTingkat, setFilterTingkat] = React.useState<string>("Semua")
+  const [filterKelas, setFilterKelas] = React.useState<string>("Semua")
   const [search, setSearch] = React.useState("")
 
   // Sort State
@@ -66,17 +63,6 @@ export default function SoalKuisPage() {
   // Pagination State
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(5)
-
-  // Dialog Modals
-  const [openPublishModal, setOpenPublishModal] = React.useState(false)
-  const [openAddPesertaModal, setOpenAddPesertaModal] = React.useState(false)
-
-  // Form State Peserta
-  const [formPeserta, setFormPeserta] = React.useState({
-    nisn: "",
-    nama: "",
-    nilai: "",
-  })
 
   // Sort Logic
   const handleSortKuis = (col: keyof SoalKuis) => {
@@ -90,12 +76,12 @@ export default function SoalKuisPage() {
   // Processed Data
   const processedKuisData = React.useMemo(() => {
     let result = kuisData.filter((item) => {
-      const matchTingkat = filterTingkat === "Semua" || item.tingkat === filterTingkat
+      const matchKelas = filterKelas === "Semua" || item.distribusiKelas.includes(filterKelas)
       const matchSearch =
         item.judulKuis.toLowerCase().includes(search.toLowerCase()) ||
         item.mataPelajaran.toLowerCase().includes(search.toLowerCase()) ||
         item.token.toLowerCase().includes(search.toLowerCase())
-      return matchTingkat && matchSearch
+      return matchKelas && matchSearch
     })
 
     if (sortKuis.col) {
@@ -107,7 +93,7 @@ export default function SoalKuisPage() {
       })
     }
     return result
-  }, [kuisData, filterTingkat, search, sortKuis])
+  }, [kuisData, filterKelas, search, sortKuis])
 
   const processedPesertaData = React.useMemo(() => {
     let result = pesertaList.filter(
@@ -158,11 +144,11 @@ export default function SoalKuisPage() {
               <Button variant="outline" onClick={handleBackToKuis}>
                 <ChevronLeft className="mr-2 h-4 w-4" /> Kembali
               </Button>
-              <Button onClick={() => setOpenAddPesertaModal(true)}>
+              <Button>
                 <Plus className="mr-2 h-4 w-4" /> Tambah Peserta
               </Button>
               {selectedKuis.status === "Draft" && (
-                <Button variant="secondary" onClick={() => setOpenPublishModal(true)}>
+                <Button variant="secondary">
                   <Send className="mr-2 h-4 w-4" /> Publikasikan Kuis
                 </Button>
               )}
@@ -192,7 +178,7 @@ export default function SoalKuisPage() {
 
         {!selectedKuis && (
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Select value={filterTingkat} onValueChange={(val) => val && setFilterTingkat(val)}>
+            <Select value={filterKelas} onValueChange={(val) => val && setFilterKelas(val)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Tingkat Kelas" />
               </SelectTrigger>
@@ -216,15 +202,15 @@ export default function SoalKuisPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]">No</TableHead>
-                  {(["judulKuis", "mataPelajaran", "tingkat", "jumlahSoal", "durasiMenit", "token", "status"] as const).map((col) => (
+                  {(["judulKuis", "mataPelajaran", "distribusiKelas", "jumlahSoal", "durasiMenit", "token", "status"] as const).map((col) => (
                     <TableHead key={col}>
                       <Button variant="ghost" size="sm" onClick={() => handleSortKuis(col)} className="-ml-3 h-8">
                         {col === "judulKuis"
                           ? "Judul Kuis"
                           : col === "mataPelajaran"
                           ? "Mata Pelajaran"
-                          : col === "tingkat"
-                          ? "Kelas"
+                          : col === "distribusiKelas"
+                          ? "Distribusi Kelas"
                           : col === "jumlahSoal"
                           ? "Soal"
                           : col === "durasiMenit"
@@ -250,7 +236,22 @@ export default function SoalKuisPage() {
                       <TableCell>{(page - 1) * pageSize + i + 1}</TableCell>
                       <TableCell className="font-semibold">{item.judulKuis}</TableCell>
                       <TableCell>{item.mataPelajaran}</TableCell>
-                      <TableCell><Badge variant="secondary">Kelas {item.tingkat}</Badge></TableCell>
+                      
+
+                       <TableCell>
+                                              <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                                {item.distribusiKelas.split(",").map((k, idx) => (
+                                                  <Badge
+                                                    key={idx}
+                                                    variant="secondary"
+                                                    className="text-[11px] font-medium bg-blue-100/50 text-foreground hover:bg-muted border"
+                                                  >
+                                                    {k.trim()}
+                                                  </Badge>
+                                                ))}
+                                              </div>
+                                            </TableCell>
+
                       <TableCell>{item.jumlahSoal} Soal</TableCell>
                       <TableCell>{item.durasiMenit} Mnt</TableCell>
                       <TableCell>
@@ -276,7 +277,7 @@ export default function SoalKuisPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <Link
-                            href={`/dashboard/soal-kuis/edit`}
+                            href="/dashboard/soal-kuis/edit"
                             className={buttonVariants({ variant: "outline", size: "icon", className: "h-8 w-8 text-foreground" })}
                             title="Edit Kuis"
                           >
