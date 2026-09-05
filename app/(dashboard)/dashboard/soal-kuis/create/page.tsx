@@ -2,6 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { driver } from "driver.js"
+import "driver.js/dist/driver.css"
+
 import {
   ArrowLeft,
   Save,
@@ -21,6 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Accordion,
   AccordionContent,
@@ -44,7 +48,7 @@ interface SoalItem {
 }
 
 const listMapel = ["Matematika", "Bahasa Indonesia", "Bahasa Inggris", "Fisika", "Kimia", "Biologi"]
-const listTingkat = ["X", "XI", "XII"] as const
+const listKelas = ["X IPA", "X IPS", "XI IPA", "XI IPS", "XII IPA", "XII IPS"]
 
 export default function CreateKuisPage() {
   const router = useRouter()
@@ -53,7 +57,7 @@ export default function CreateKuisPage() {
   const [judulKuis, setJudulKuis] = React.useState("")
   const [deskripsi, setDeskripsi] = React.useState("")
   const [mataPelajaran, setMataPelajaran] = React.useState(listMapel[0])
-  const [tingkat, setTingkat] = React.useState<(typeof listTingkat)[number]>("X")
+  const [targetKelas, setTargetKelas] = React.useState<string[]>(["X IPA"])
   const [durasiMenit, setDurasiMenit] = React.useState(15)
   const [acakSoal, setAcakSoal] = React.useState(true)
   const [tampilkanHasil, setTampilkanHasil] = React.useState(true)
@@ -77,10 +81,89 @@ export default function CreateKuisPage() {
     },
   ])
 
+  // --- KONFIGURASI DRIVER.JS (GUIDED TOUR) ---
+  const startTour = React.useCallback(() => {
+    const driverObj = driver({
+      showProgress: true,
+      animate: true,
+      allowClose: true,
+      showButtons: ["next", "previous", "close"],
+      nextBtnText: "Lanjut",
+      prevBtnText: "Kembali",
+      doneBtnText: "Selesai",
+      steps: [
+        {
+          element: "#tour-card-info",
+          popover: {
+            title: "Informasi Kuis",
+            description: "Isi judul kuis, deskripsi instruksi, mata pelajaran, dan durasi pengerjaan di bagian ini.",
+            side: "right",
+            align: "start",
+          },
+        },
+        {
+          element: "#tour-distribusi-kelas",
+          popover: {
+            title: "Distribusi Kelas",
+            description: "Pilih satu atau beberapa kelas yang diperbolehkan mengakses kuis ini.",
+            side: "right",
+            align: "start",
+          },
+        },
+        {
+          element: "#tour-tombol-tambah-soal",
+          popover: {
+            title: "Tambah Pertanyaan",
+            description: "Gunakan tombol ini untuk menambah pertanyaan baru bertipe Pilihan Ganda atau Isian/Essai.",
+            side: "bottom",
+            align: "end",
+          },
+        },
+        {
+          element: "#tour-daftar-soal",
+          popover: {
+            title: "Daftar Soal Kuis",
+            description: "Atur pertanyaan, poin/bobot nilai, opsi pilihan jawaban, serta pilih kunci jawaban yang benar.",
+            side: "left",
+            align: "start",
+          },
+        },
+        {
+          element: "#tour-action-buttons",
+          popover: {
+            title: "Aksi Simpan & Publikasi",
+            description: "Anda dapat melihat preview kuis, menyimpan draft untuk diedit lagi nanti, atau langsung mempublikasikannya.",
+            side: "bottom",
+            align: "end",
+          },
+        },
+      ],
+    })
+
+    driverObj.drive()
+  }, [])
+
+  // Jalankan Tour Otomatis SETIAP KALI Halaman Dimuat / Di-refresh
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      startTour()
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [startTour])
+
   // Total Poin Keseluruhan
   const totalBobot = React.useMemo(() => {
     return soalList.reduce((acc, curr) => acc + (Number(curr.bobot) || 0), 0)
   }, [soalList])
+
+  // --- HANDLER MULTIPLE KELAS ---
+  const handleToggleKelas = (itemKelas: string) => {
+    setTargetKelas((prev) =>
+      prev.includes(itemKelas)
+        ? prev.filter((k) => k !== itemKelas)
+        : [...prev, itemKelas]
+    )
+  }
 
   // --- HANDLERS SOAL ---
   const handleAddSoal = (tipe: "Pilihan Ganda" | "Essai") => {
@@ -142,7 +225,7 @@ export default function CreateKuisPage() {
       judulKuis,
       deskripsi,
       mataPelajaran,
-      tingkat,
+      targetKelas,
       durasiMenit,
       soalList,
     }
@@ -155,7 +238,7 @@ export default function CreateKuisPage() {
       judulKuis,
       deskripsi,
       mataPelajaran,
-      tingkat,
+      targetKelas,
       durasiMenit,
       acakSoal,
       tampilkanHasil,
@@ -187,7 +270,12 @@ export default function CreateKuisPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div id="tour-action-buttons" className="flex items-center gap-2">
+          {/* Tombol Pemicu Tour */}
+          <Button variant="ghost" size="icon" title="Bantuan Tour" onClick={startTour}>
+            <HelpCircle className="h-5 w-5 text-muted-foreground" />
+          </Button>
+
           <Button variant="outline" onClick={handleOpenPreviewPage}>
             <Eye className="mr-2 h-4 w-4" /> Preview Kuis
           </Button>
@@ -203,19 +291,24 @@ export default function CreateKuisPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Kolom Kiri: Sticky Card Pengaturan Kuis */}
         <div className="lg:col-span-1 lg:sticky lg:top-6 self-start space-y-6">
-          <Card>
+          <Card id="tour-card-info">
             <CardHeader>
               <CardTitle className="text-lg">Informasi Kuis</CardTitle>
-              <CardDescription>Atur identitas mata pelajaran, kelas, dan durasi pengerjaan.</CardDescription>
+              <CardDescription>
+                Pengaturan dan informasi kuis. <span className="text-destructive">*</span> 
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="judulKuis">Judul Kuis</Label>
+                <Label htmlFor="judulKuis">
+                  Judul Kuis <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="judulKuis"
                   placeholder="Contoh: Kuis Matematika - Persamaan Kuadrat"
                   value={judulKuis}
                   onChange={(e) => setJudulKuis(e.target.value)}
+                  required
                 />
               </div>
 
@@ -230,53 +323,64 @@ export default function CreateKuisPage() {
                 />
               </div>
 
-              {/* MAPEL & KELAS */}
-              <div className="flex items-center gap-3">
-                <div className="grid gap-2 flex-1">
-                  <Label>Mata Pelajaran</Label>
-                  <Select value={mataPelajaran} onValueChange={(v) => v && setMataPelajaran(v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Pilih Mapel" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {listMapel.map((m) => (
-                        <SelectItem key={m} value={m}>
-                          {m}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* MAPEL */}
+              <div className="grid gap-2">
+                <Label>
+                  Mata Pelajaran <span className="text-destructive">*</span>
+                </Label>
+                <Select value={mataPelajaran} onValueChange={(v) => v && setMataPelajaran(v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Pilih Mapel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {listMapel.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <div className="grid gap-2 w-[120px] shrink-0">
-                  <Label className="whitespace-nowrap">Kelas / Tingkat</Label>
-                  <Select
-                    value={tingkat}
-                    onValueChange={(v) => v && setTingkat(v as (typeof listTingkat)[number])}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {listTingkat.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          Kelas {t}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* DISTRIBUSI KELAS (MULTIPLE SELECTION) */}
+              <div id="tour-distribusi-kelas" className="grid gap-2">
+                <Label>
+                  Distribusi Kelas <span className="text-destructive">*</span>
+                </Label>
+                <div className="grid grid-cols-2 gap-2 bg-muted/30 p-3 rounded-lg border">
+                  {listKelas.map((k) => {
+                    const isChecked = targetKelas.includes(k)
+                    return (
+                      <div key={k} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`kelas-${k}`}
+                          checked={isChecked}
+                          onCheckedChange={() => handleToggleKelas(k)}
+                        />
+                        <Label
+                          htmlFor={`kelas-${k}`}
+                          className="text-xs font-normal cursor-pointer select-none"
+                        >
+                          {k}
+                        </Label>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
               {/* DURASI */}
-              <div className="grid gap-2 pt-2 border-t">
-                <Label htmlFor="durasi">Durasi Pengerjaan (Menit)</Label>
+              <div className="grid gap-2 pt-1">
+                <Label htmlFor="durasi">
+                  Durasi Pengerjaan (Menit) <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="durasi"
                   type="number"
                   min={1}
                   value={durasiMenit}
                   onChange={(e) => setDurasiMenit(Number(e.target.value))}
+                  required
                 />
               </div>
 
@@ -308,7 +412,7 @@ export default function CreateKuisPage() {
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <HelpCircle className="h-5 w-5" /> Pertanyaan Kuis ({soalList.length})
             </h2>
-            <div className="flex items-center gap-2">
+            <div id="tour-tombol-tambah-soal" className="flex items-center gap-2">
               <Button size="sm" onClick={() => handleAddSoal("Pilihan Ganda")}>
                 <Plus className="mr-1 h-3.5 w-3.5" /> PG Baru
               </Button>
@@ -318,7 +422,7 @@ export default function CreateKuisPage() {
             </div>
           </div>
 
-          <div className="max-h-[calc(100vh-180px)] overflow-y-auto pr-2 space-y-4 rounded-md">
+          <div id="tour-daftar-soal" className="max-h-[calc(100vh-180px)] overflow-y-auto pr-2 space-y-4 rounded-md">
             <Accordion
               {...({
                 type: "multiple",
@@ -347,7 +451,7 @@ export default function CreateKuisPage() {
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md border">
                         <Label htmlFor={`bobot-${soal.id}`} className="text-xs text-muted-foreground whitespace-nowrap">
-                          Poin:
+                          Poin <span className="text-destructive">*</span>:
                         </Label>
                         <Input
                           id={`bobot-${soal.id}`}
@@ -357,6 +461,7 @@ export default function CreateKuisPage() {
                           onChange={(e) => handleUpdateBobot(sIdx, Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
                           className="w-16 h-7 text-xs px-2 text-center bg-background"
+                          required
                         />
                       </div>
 
@@ -379,19 +484,22 @@ export default function CreateKuisPage() {
 
                   <AccordionContent className="pt-2 pb-4 space-y-4 border-t mt-1">
                     <div className="grid gap-2 pt-1 px-1">
-                      <Label>Pertanyaan Soal</Label>
+                      <Label>
+                        Pertanyaan Soal <span className="text-destructive">*</span>
+                      </Label>
                       <Textarea
                         placeholder="Tuliskan pertanyaan kuis di sini..."
                         value={soal.pertanyaan}
                         onChange={(e) => handleUpdateSoalPertanyaan(sIdx, e.target.value)}
                         className="min-h-[90px]"
+                        required
                       />
                     </div>
 
                     {soal.tipe === "Pilihan Ganda" && (
                       <div className="space-y-3 pt-2">
                         <Label className="text-xs text-muted-foreground">
-                          Opsi Jawaban (Pilih salah satu sebagai kunci jawaban):
+                          Opsi Jawaban <span className="text-destructive">*</span>
                         </Label>
                         <div className="space-y-2">
                           {soal.opsi.map((opsi, oIdx) => {
@@ -413,6 +521,7 @@ export default function CreateKuisPage() {
                                   placeholder={`Pilihan ${labelOpsi}...`}
                                   value={opsi.teks}
                                   onChange={(e) => handleUpdateOpsiTeks(sIdx, oIdx, e.target.value)}
+                                  required
                                 />
                               </div>
                             )

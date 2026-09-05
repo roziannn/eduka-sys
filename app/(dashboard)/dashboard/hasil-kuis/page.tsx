@@ -18,6 +18,7 @@ import {
   FileText,
   XCircle,
   Timer,
+  HelpCircle,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -37,10 +38,11 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 // --- TYPES ---
-interface Exam {
+interface Kuis {
   id: string
-  namaUjian: string
-  jenis: "UH" | "UTS" | "UAS" | "US"
+  namaKuis: string
+  mataPelajaran: string
+  kelas: string
   token: string
 }
 
@@ -58,7 +60,7 @@ interface Student {
   nisn: string
   nama: string
   nilai: number | null
-  status: "Tuntas" | "Remedial" | "Belum Dikerjakan"
+  status: "Tuntas" | "Di Bawah KKM" | "Belum Dikerjakan" 
   waktuMulai?: string
   waktuSelesai?: string
   durasiPengerjaan?: string
@@ -67,31 +69,31 @@ interface Student {
 }
 
 // --- DUMMY DATA ---
-const initialExams: Exam[] = [
-  { id: "1", namaUjian: "Penilaian Tengah Semester - Matematika", jenis: "UTS", token: "MTK2026" },
-  { id: "2", namaUjian: "Ujian Akhir - Fisika Dasar", jenis: "UAS", token: "FSK998" },
-  { id: "3", namaUjian: "Ulangan Harian 1 - Bahasa Indonesia", jenis: "UH", token: "BINDO01" },
-  { id: "4", namaUjian: "Ujian Sekolah - Biologi", jenis: "US", token: "BIO2026" },
+const initialQuizzes: Kuis[] = [
+  { id: "k-1", namaKuis: "Kuis Persamaan Kuadrat", mataPelajaran: "Matematika", kelas: "X IPA, X IPS", token: "KUISMATH" },
+  { id: "k-2", namaKuis: "Kuis Hukum Newton", mataPelajaran: "Fisika", kelas: "XI IPA", token: "KUISFIS" },
+  { id: "k-3", namaKuis: "Kuis Teks Laporan Hasil Observasi", mataPelajaran: "Bahasa Indonesia", kelas: "X IPS", token: "KUISBINDO" },
+  { id: "k-4", namaKuis: "Kuis Tata Nama Senyawa", mataPelajaran: "Kimia", kelas: "X IPA", token: "KUISKIM" },
 ]
 
-const dummyClasses = ["X IPA 1", "X IPA 2", "X IPA 3", "X IPS 1", "X IPS 2"]
+const dummyClasses = ["X IPA 1", "X IPA 2", "X IPS 1", "XI IPA 1"]
 
 const dummyJawabanList: JawabanDetail[] = [
   {
     no: 1,
-    pertanyaan: "Berapakah hasil dari 12 x 12?",
-    jawabanSiswa: "B. 144",
-    kunciJawaban: "B. 144",
+    pertanyaan: "Akar-akar dari persamaan x² - 5x + 6 = 0 adalah...",
+    jawabanSiswa: "A. x = 2 dan x = 3",
+    kunciJawaban: "A. x = 2 dan x = 3",
     isBenar: true,
     poin: 50,
   },
   {
     no: 2,
-    pertanyaan: "Jelaskan definisi dari sistem persamaan linear dua variabel!",
-    jawabanSiswa: "Sistem yang memiliki dua variabel dengan pangkat tertinggi satu.",
-    kunciJawaban: "Sistem persamaan yang terdiri dari dua persamaan linear dengan dua variabel.",
+    pertanyaan: "Berapakah nilai diskriminan dari persamaan 2x² + 4x + 2 = 0?",
+    jawabanSiswa: "0",
+    kunciJawaban: "0",
     isBenar: true,
-    poin: 38,
+    poin: 50,
   },
 ]
 
@@ -101,40 +103,40 @@ const dummyStudentsMap: Record<string, Student[]> = {
       id: "p-1",
       nisn: "0051234001",
       nama: "Ahmad Rizky",
-      nilai: 88,
+      nilai: 100,
       status: "Tuntas",
-      tanggal: "Senin, 14 September 2026",
-      waktuMulai: "08:00 WIB",
-      waktuSelesai: "09:15 WIB",
-      durasiPengerjaan: "75 Menit",
+      tanggal: "Selasa, 15 September 2026",
+      waktuMulai: "09:00 WIB",
+      waktuSelesai: "09:12 WIB",
+      durasiPengerjaan: "12 Menit",
       jawabanDetail: dummyJawabanList,
     },
     {
       id: "p-2",
       nisn: "0051234002",
       nama: "Amanda Citra",
-      nilai: 55,
-      status: "Remedial",
-      tanggal: "Senin, 14 September 2026",
-      waktuMulai: "08:05 WIB",
-      waktuSelesai: "09:00 WIB",
-      durasiPengerjaan: "55 Menit",
+      nilai: 50,
+      status: "Di Bawah KKM",
+      tanggal: "Selasa, 15 September 2026",
+      waktuMulai: "09:05 WIB",
+      waktuSelesai: "09:18 WIB",
+      durasiPengerjaan: "13 Menit",
       jawabanDetail: [
         {
           no: 1,
-          pertanyaan: "Berapakah hasil dari 12 x 12?",
-          jawabanSiswa: "A. 124",
-          kunciJawaban: "B. 144",
+          pertanyaan: "Akar-akar dari persamaan x² - 5x + 6 = 0 adalah...",
+          jawabanSiswa: "B. x = -2 dan x = -3",
+          kunciJawaban: "A. x = 2 dan x = 3",
           isBenar: false,
           poin: 0,
         },
         {
           no: 2,
-          pertanyaan: "Jelaskan definisi dari sistem persamaan linear dua variabel!",
-          jawabanSiswa: "Persamaan matematika.",
-          kunciJawaban: "Sistem persamaan yang terdiri dari dua persamaan linear dengan dua variabel.",
-          isBenar: false,
-          poin: 20,
+          pertanyaan: "Berapakah nilai diskriminan dari persamaan 2x² + 4x + 2 = 0?",
+          jawabanSiswa: "0",
+          kunciJawaban: "0",
+          isBenar: true,
+          poin: 50,
         },
       ],
     },
@@ -145,32 +147,20 @@ const dummyStudentsMap: Record<string, Student[]> = {
       id: "p-4",
       nisn: "0051234004",
       nama: "Dina Larasati",
-      nilai: 45,
-      status: "Remedial",
-      tanggal: "Senin, 14 September 2026",
+      nilai: 50,
+      status: "Di Bawah KKM",
+      tanggal: "Selasa, 15 September 2026",
       waktuMulai: "10:00 WIB",
-      waktuSelesai: "10:45 WIB",
-      durasiPengerjaan: "45 Menit",
-      jawabanDetail: dummyJawabanList,
-    },
-    {
-      id: "p-5",
-      nisn: "0051234005",
-      nama: "Eko Wijaya",
-      nilai: 90,
-      status: "Tuntas",
-      tanggal: "Senin, 14 September 2026",
-      waktuMulai: "10:00 WIB",
-      waktuSelesai: "11:20 WIB",
-      durasiPengerjaan: "80 Menit",
+      waktuSelesai: "10:14 WIB",
+      durasiPengerjaan: "14 Menit",
       jawabanDetail: dummyJawabanList,
     },
   ],
 }
 
-export default function KoreksiUjianPage() {
-  const [exams] = React.useState<Exam[]>(initialExams)
-  const [selectedExam, setSelectedExam] = React.useState<Exam | null>(null)
+export default function HasilKuisPage() {
+  const [quizzes] = React.useState<Kuis[]>(initialQuizzes)
+  const [selectedQuiz, setSelectedQuiz] = React.useState<Kuis | null>(null)
   const [selectedClass, setSelectedClass] = React.useState<string>("X IPA 1")
 
   // Filter & Search
@@ -180,10 +170,10 @@ export default function KoreksiUjianPage() {
   const [openRetakeModal, setOpenRetakeModal] = React.useState(false)
   const [openDetailModal, setOpenDetailModal] = React.useState(false)
   const [selectedStudent, setSelectedStudent] = React.useState<Student | null>(null)
-  const [retakeReason, setRetakeReason] = React.useState<string>("remedial")
+  const [retakeReason, setRetakeReason] = React.useState<string>("Di Bawah KKM")
 
   // Sorting State
-  const [sortExam, setSortExam] = React.useState<{ col: keyof Exam | null; dir: "asc" | "desc" }>({
+  const [sortQuiz, setSortQuiz] = React.useState<{ col: keyof Kuis | null; dir: "asc" | "desc" }>({
     col: null,
     dir: "asc",
   })
@@ -197,33 +187,34 @@ export default function KoreksiUjianPage() {
   const [pageSize, setPageSize] = React.useState(5)
 
   // Handlers Sort
-  const handleSortExam = (col: keyof Exam) => {
-    setSortExam((prev) => ({ col, dir: prev.col === col && prev.dir === "asc" ? "desc" : "asc" }))
+  const handleSortQuiz = (col: keyof Kuis) => {
+    setSortQuiz((prev) => ({ col, dir: prev.col === col && prev.dir === "asc" ? "desc" : "asc" }))
   }
 
   const handleSortStudent = (col: keyof Student) => {
     setSortStudent((prev) => ({ col, dir: prev.col === col && prev.dir === "asc" ? "desc" : "asc" }))
   }
 
-  // Processed Data Ujian
-  const processedExams = React.useMemo(() => {
-    let result = exams.filter(
+  // Processed Data Kuis
+  const processedQuizzes = React.useMemo(() => {
+    let result = quizzes.filter(
       (item) =>
-        item.namaUjian.toLowerCase().includes(search.toLowerCase()) ||
-        item.jenis.toLowerCase().includes(search.toLowerCase()) ||
+        item.namaKuis.toLowerCase().includes(search.toLowerCase()) ||
+        item.mataPelajaran.toLowerCase().includes(search.toLowerCase()) ||
+        item.kelas.toLowerCase().includes(search.toLowerCase()) ||
         item.token.toLowerCase().includes(search.toLowerCase())
     )
 
-    if (sortExam.col) {
+    if (sortQuiz.col) {
       result.sort((a, b) => {
-        const valA = a[sortExam.col!]
-        const valB = b[sortExam.col!]
+        const valA = a[sortQuiz.col!]
+        const valB = b[sortQuiz.col!]
         const res = valA.localeCompare(valB)
-        return sortExam.dir === "asc" ? res : -res
+        return sortQuiz.dir === "asc" ? res : -res
       })
     }
     return result
-  }, [exams, search, sortExam])
+  }, [quizzes, search, sortQuiz])
 
   // Processed Data Siswa
   const currentStudents = React.useMemo(() => {
@@ -250,21 +241,21 @@ export default function KoreksiUjianPage() {
   }, [currentStudents, search, sortStudent])
 
   // Pagination Calculations
-  const activeDataLength = selectedExam ? processedStudents.length : processedExams.length
+  const activeDataLength = selectedQuiz ? processedStudents.length : processedQuizzes.length
   const totalPages = Math.ceil(activeDataLength / pageSize) || 1
-  const paginatedExams = processedExams.slice((page - 1) * pageSize, page * pageSize)
+  const paginatedQuizzes = processedQuizzes.slice((page - 1) * pageSize, page * pageSize)
   const paginatedStudents = processedStudents.slice((page - 1) * pageSize, page * pageSize)
 
   // Navigation Handlers
-  const handleShowExam = (exam: Exam) => {
-    setSelectedExam(exam)
+  const handleShowQuiz = (quiz: Kuis) => {
+    setSelectedQuiz(quiz)
     setSelectedClass("X IPA 1")
     setSearch("")
     setPage(1)
   }
 
   const handleBack = () => {
-    setSelectedExam(null)
+    setSelectedQuiz(null)
     setSearch("")
     setPage(1)
   }
@@ -272,7 +263,7 @@ export default function KoreksiUjianPage() {
   // Open Modals
   const handleOpenRetake = (student: Student) => {
     setSelectedStudent(student)
-    setRetakeReason("remedial")
+    setRetakeReason("Di Bawah KKM")
     setOpenRetakeModal(true)
   }
 
@@ -282,7 +273,7 @@ export default function KoreksiUjianPage() {
   }
 
   const handleConfirmRetake = () => {
-    console.log("Ujian ulang dikonfirmasi untuk:", selectedStudent?.nama, "Alasan:", retakeReason)
+    console.log("Kuis ulang dikonfirmasi untuk:", selectedStudent?.nama, "Alasan:", retakeReason)
     setOpenRetakeModal(false)
   }
 
@@ -296,11 +287,11 @@ export default function KoreksiUjianPage() {
             Tuntas
           </Badge>
         )
-      case "Remedial":
+      case "Di Bawah KKM":
         return (
           <Badge className="bg-destructive hover:bg-destructive/90 gap-1">
             <AlertCircle className="h-3.5 w-3.5" />
-            Remedial
+            Di Bawah KKM
           </Badge>
         )
       case "Belum Dikerjakan":
@@ -321,18 +312,18 @@ export default function KoreksiUjianPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            Hasil Ujian
+           Hasil Kuis
           </h1>
           <p className="text-sm text-muted-foreground">
-            {selectedExam
-              ? `Koreksi lembar jawaban untuk: ${selectedExam.namaUjian}`
-              : "Daftar rekapitulasi nilai ujian siswa/i."}
+            {selectedQuiz
+              ? `Hasil & koreksi lembar jawaban kuis: ${selectedQuiz.namaKuis}`
+              : "Daftar rekapitulasi nilai kuis latihan siswa/i."}
           </p>
         </div>
 
-        {selectedExam && (
+        {selectedQuiz && (
           <Button variant="outline" onClick={handleBack}>
-            <ChevronLeft className="mr-2 h-4 w-4" /> Kembali ke Daftar Ujian
+            <ChevronLeft className="mr-2 h-4 w-4" /> Kembali ke Daftar Kuis
           </Button>
         )}
       </div>
@@ -340,7 +331,7 @@ export default function KoreksiUjianPage() {
       {/* Filter Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
         <Input
-          placeholder={selectedExam ? "Cari NISN atau nama siswa..." : "Cari nama ujian, jenis, atau token..."}
+          placeholder={selectedQuiz ? "Cari NISN atau nama siswa..." : "Cari nama kuis, mapel, kelas, atau token..."}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)
@@ -351,24 +342,30 @@ export default function KoreksiUjianPage() {
       </div>
 
       {/* Tampilan Utama */}
-      {!selectedExam ? (
-        /* TABEL UTAMA: DAFTAR UJIAN */
+      {!selectedQuiz ? (
+        /* TABEL UTAMA: DAFTAR KUIS */
         <div className="rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]">No</TableHead>
-                {(["namaUjian", "jenis", "token"] as const).map((col) => (
+                {(["namaKuis", "mataPelajaran", "kelas", "token"] as const).map((col) => (
                   <TableHead key={col}>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleSortExam(col)}
+                      onClick={() => handleSortQuiz(col)}
                       className="-ml-3 h-8"
                     >
-                      {col === "namaUjian" ? "Nama Ujian" : col === "jenis" ? "Jenis" : "Token"}
-                      {sortExam.col === col ? (
-                        sortExam.dir === "asc" ? (
+                      {col === "namaKuis"
+                        ? "Nama Kuis"
+                        : col === "mataPelajaran"
+                        ? "Mata Pelajaran"
+                        : col === "kelas"
+                        ? "Distribusi Kelas"
+                        : "Token Kuis"}
+                      {sortQuiz.col === col ? (
+                        sortQuiz.dir === "asc" ? (
                           <ArrowUp className="ml-1 h-3.5 w-3.5" />
                         ) : (
                           <ArrowDown className="ml-1 h-3.5 w-3.5" />
@@ -383,16 +380,28 @@ export default function KoreksiUjianPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedExams.length ? (
-                paginatedExams.map((item, i) => (
+              {paginatedQuizzes.length ? (
+                paginatedQuizzes.map((item, i) => (
                   <TableRow key={item.id}>
                     <TableCell>{(page - 1) * pageSize + i + 1}</TableCell>
-                    <TableCell className="font-semibold">{item.namaUjian}</TableCell>
+                    <TableCell className="font-semibold">{item.namaKuis}</TableCell>
+                    <TableCell>{item.mataPelajaran}</TableCell>
+                    
+                    {/* BADGE DISTRIBUSI KELAS */}
                     <TableCell>
-                      <Badge variant="outline">
-                        {item.jenis}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1 max-w-[220px]">
+                        {item.kelas.split(",").map((k, idx) => (
+                          <Badge
+                            key={idx}
+                            variant="secondary"
+                            className="text-[11px] font-medium bg-muted/60 text-foreground hover:bg-muted border"
+                          >
+                            {k.trim()}
+                          </Badge>
+                        ))}
+                      </div>
                     </TableCell>
+
                     <TableCell>
                       <Badge variant="secondary" className="font-mono gap-1">
                         <KeyRound className="h-3 w-3" />
@@ -403,7 +412,7 @@ export default function KoreksiUjianPage() {
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={() => handleShowExam(item)}
+                        onClick={() => handleShowQuiz(item)}
                       >
                         <Eye className="mr-1.5 h-4 w-4" /> Show
                       </Button>
@@ -412,8 +421,8 @@ export default function KoreksiUjianPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    Data ujian tidak ditemukan.
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    Data kuis tidak ditemukan.
                   </TableCell>
                 </TableRow>
               )}
@@ -532,7 +541,7 @@ export default function KoreksiUjianPage() {
                           : col === "nama"
                           ? "Nama Siswa"
                           : col === "nilai"
-                          ? "Nilai"
+                          ? "Skor Kuis"
                           : "Status Hasil"}
                         {sortStudent.col === col ? (
                           sortStudent.dir === "asc" ? (
@@ -578,7 +587,7 @@ export default function KoreksiUjianPage() {
                             variant="secondary"
                             onClick={() => handleOpenRetake(item)}
                           >
-                            <RotateCcw className="mr-1 h-3.5 w-3.5" /> Ujian Ulang
+                            <RotateCcw className="mr-1 h-3.5 w-3.5" /> Kuis Ulang
                           </Button>
                         </div>
                       </TableCell>
@@ -649,29 +658,29 @@ export default function KoreksiUjianPage() {
         </div>
       )}
 
-      {/* MODAL UJIAN ULANG */}
+      {/* MODAL KUIS ULANG */}
       <Dialog open={openRetakeModal} onOpenChange={setOpenRetakeModal}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-primary" /> Atur Ujian Ulang
+              <RotateCcw className="h-5 w-5 text-primary" /> Atur Kuis Ulang
             </DialogTitle>
             <DialogDescription>
-              Izinkan siswa <strong>{selectedStudent?.nama}</strong> untuk mengerjakan ujian kembali.
+              Izinkan siswa <strong>{selectedStudent?.nama}</strong> untuk mengerjakan kuis kembali.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <Label className="text-sm font-semibold">Pilih Alasan Ujian Ulang:</Label>
+            <Label className="text-sm font-semibold">Pilih Alasan Kuis Ulang:</Label>
             <RadioGroup value={retakeReason} onValueChange={setRetakeReason} className="space-y-2">
               <div className="flex items-start space-x-3 rounded-md border p-3 cursor-pointer hover:bg-muted/50">
-                <RadioGroupItem value="remedial" id="r1" className="mt-1" />
+                <RadioGroupItem value="Di Bawah KKM" id="r1" className="mt-1" />
                 <div className="space-y-0.5">
                   <Label htmlFor="r1" className="font-semibold cursor-pointer">
-                    Remedial Ujian
+                    Di Bawah KKM Kuis
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Nilai siswa belum mencapai kriteria ketuntasan (KKM).
+                    Skor kuis siswa belum mencapai batas tuntas.
                   </p>
                 </div>
               </div>
@@ -680,10 +689,10 @@ export default function KoreksiUjianPage() {
                 <RadioGroupItem value="teknis" id="r2" className="mt-1" />
                 <div className="space-y-0.5">
                   <Label htmlFor="r2" className="font-semibold cursor-pointer">
-                    Kendala Teknis / Listrik
+                    Kendala Teknis / Jaringan
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Terjadi gangguan jaringan atau mati listrik saat pengerjaan.
+                    Terjadi gangguan koneksi internet saat pengerjaan.
                   </p>
                 </div>
               </div>
@@ -692,10 +701,10 @@ export default function KoreksiUjianPage() {
                 <RadioGroupItem value="kurang_maksimal" id="r3" className="mt-1" />
                 <div className="space-y-0.5">
                   <Label htmlFor="r3" className="font-semibold cursor-pointer">
-                    Perbaikan Nilai (Kurang Maksimal)
+                    Latihan Tambahan
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Diberikan kesempatan tambahan atas persetujuan pengajar.
+                    Diberikan kesempatan tambahan untuk memperdalam pemahaman materi.
                   </p>
                 </div>
               </div>
@@ -716,16 +725,16 @@ export default function KoreksiUjianPage() {
         <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" /> Rincian Hasil Pengerjaan
+              <FileText className="h-5 w-5 text-primary" /> Rincian Pengerjaan Kuis
             </DialogTitle>
             <DialogDescription>
-              Detail aktivitas dan lembar jawaban siswa <strong>{selectedStudent?.nama}</strong>.
+              Detail aktivitas dan jawaban siswa <strong>{selectedStudent?.nama}</strong>.
             </DialogDescription>
           </DialogHeader>
 
           {selectedStudent && (
             <div className="space-y-5 py-2">
-              {/* Informasi Pengerjaan Ujian */}
+              {/* Informasi Pengerjaan Kuis */}
               <div className="grid grid-cols-2 gap-y-3 gap-x-6 bg-muted/40 p-3.5 rounded-lg text-xs">
                 <div className="space-y-1">
                   <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
@@ -753,7 +762,7 @@ export default function KoreksiUjianPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-muted-foreground block font-medium">Nilai Akhir & Status</span>
+                  <span className="text-muted-foreground block font-medium">Skor Akhir & Status</span>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-extrabold text-foreground">{selectedStudent.nilai ?? "-"}</span>
                     {getStatusBadge(selectedStudent.status)}
@@ -766,7 +775,7 @@ export default function KoreksiUjianPage() {
                 <h3 className="text-sm font-semibold border-b pb-2 flex items-center justify-between">
                   <span>Daftar Jawaban Siswa</span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    Total: {selectedStudent.jawabanDetail?.length || 0} Soal
+                    Total: {selectedStudent.jawabanDetail?.length || 0} Pertanyaan
                   </span>
                 </h3>
 

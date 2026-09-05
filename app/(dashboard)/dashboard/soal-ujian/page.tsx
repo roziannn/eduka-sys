@@ -6,15 +6,13 @@ import {
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
-  Pencil,
   Plus,
   Printer,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Eye,
-  Award,
   KeyRound,
+  Edit,
 } from "lucide-react"
 
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -22,8 +20,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
 
 // --- TYPES ---
 interface SoalUjian {
@@ -53,27 +49,15 @@ const listTahunAjaran = ["2025/2026", "2024/2025"]
 const listSemester = ["Genap", "Ganjil"]
 
 const initialUjianData: SoalUjian[] = [
-  { id: "u-1", namaUjian: "UTS Matematika Wajib X", mataPelajaran: "Matematika", jenisUjian: "UTS", kelas: "X IPA 1", tahunAjaran: "2025/2026", semester: "Genap", jumlahSoal: 30, durasiMenit: 90, token: "MTK10X", status: "Siap Ujian" },
-  { id: "u-2", namaUjian: "UAS Fisika Dasar XI", mataPelajaran: "Fisika", jenisUjian: "UAS", kelas: "XI IPA 2", tahunAjaran: "2025/2026", semester: "Genap", jumlahSoal: 40, durasiMenit: 120, token: "FSK11Z", status: "Draft" },
-  { id: "u-3", namaUjian: "UH Bahasa Indonesia X", mataPelajaran: "Bahasa Indonesia", jenisUjian: "UH", kelas: "X IPS 1", tahunAjaran: "2024/2025", semester: "Ganjil", jumlahSoal: 20, durasiMenit: 45, token: "BIND10", status: "Selesai" },
+  { id: "u-1", namaUjian: "UTS Matematika Wajib X", mataPelajaran: "Matematika", jenisUjian: "UTS", kelas: "X IPA, X IPS", tahunAjaran: "2025/2026", semester: "Genap", jumlahSoal: 30, durasiMenit: 90, token: "MTK10X", status: "Siap Ujian" },
+  { id: "u-2", namaUjian: "UAS Fisika Dasar XI", mataPelajaran: "Fisika", jenisUjian: "UAS", kelas: "XI IPA", tahunAjaran: "2025/2026", semester: "Genap", jumlahSoal: 40, durasiMenit: 120, token: "FSK11Z", status: "Draft" },
+  { id: "u-3", namaUjian: "UH Bahasa Indonesia X", mataPelajaran: "Bahasa Indonesia", jenisUjian: "UH", kelas: "X IPS", tahunAjaran: "2024/2025", semester: "Ganjil", jumlahSoal: 20, durasiMenit: 45, token: "BIND10", status: "Selesai" },
 ]
 
-const initialPesertaMap: Record<string, PesertaUjian[]> = {
-  "u-1": [
-    { id: "p-1", nisn: "0051234001", nama: "Ahmad Rizky", nilai: 88, statusUjian: "Selesai" },
-    { id: "p-2", nisn: "0051234002", nama: "Amanda Citra", nilai: 62, statusUjian: "Perlu Remidial" },
-    { id: "p-3", nisn: "0051234003", nama: "Bagas Pratama", nilai: 0, statusUjian: "Belum Mengerjakan" },
-  ],
-  "u-2": [
-    { id: "p-4", nisn: "0051234004", nama: "Dina Larasati", nilai: 95, statusUjian: "Selesai" },
-    { id: "p-5", nisn: "0051234005", nama: "Eko Wijaya", nilai: 78, statusUjian: "Selesai" },
-  ],
-}
-
 export default function SoalUjianPage() {
-  const [ujianData, setUjianData] = React.useState<SoalUjian[]>(initialUjianData)
+  const [ujianData] = React.useState<SoalUjian[]>(initialUjianData)
   const [selectedUjian, setSelectedUjian] = React.useState<SoalUjian | null>(null)
-  const [pesertaList, setPesertaList] = React.useState<PesertaUjian[]>([])
+  const [pesertaList] = React.useState<PesertaUjian[]>([])
 
   // Filter & Search States
   const [tahunAjaran, setTahunAjaran] = React.useState("2025/2026")
@@ -88,16 +72,9 @@ export default function SoalUjianPage() {
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(5)
 
-  // Dialog Modals
-  const [openPublishModal, setOpenPublishModal] = React.useState(false)
-  const [openAddPesertaModal, setOpenAddPesertaModal] = React.useState(false)
-
-  // Form State Peserta
-  const [formPeserta, setFormPeserta] = React.useState({
-    nisn: "",
-    nama: "",
-    nilai: "",
-  })
+  // Modals state
+  const [, setOpenPublishModal] = React.useState(false)
+  const [, setOpenAddPesertaModal] = React.useState(false)
 
   // Sort Logic
   const handleSortUjian = (col: keyof SoalUjian) => {
@@ -153,48 +130,14 @@ export default function SoalUjianPage() {
   const paginatedUjian = processedUjianData.slice((page - 1) * pageSize, page * pageSize)
   const paginatedPeserta = processedPesertaData.slice((page - 1) * pageSize, page * pageSize)
 
-  // Handlers
-  const handleViewNilai = (ujian: SoalUjian) => {
-    setSelectedUjian(ujian)
-    setPesertaList(initialPesertaMap[ujian.id] || [])
-    setSearch("")
-    setPage(1)
-  }
-
   const handleBackToUjian = () => {
     setSelectedUjian(null)
     setSearch("")
     setPage(1)
   }
 
-  const handlePublishAll = () => {
-    if (selectedUjian) {
-      setUjianData((prev) =>
-        prev.map((u) => (u.id === selectedUjian.id ? { ...u, status: "Siap Ujian" } : u))
-      )
-      setSelectedUjian((prev) => (prev ? { ...prev, status: "Siap Ujian" } : null))
-    }
-    setOpenPublishModal(false)
-  }
-
-  const handleSavePeserta = (e: React.FormEvent) => {
-    e.preventDefault()
-    const nilaiNum = Number(formPeserta.nilai) || 0
-    const newPeserta: PesertaUjian = {
-      id: `p-${Date.now()}`,
-      nisn: formPeserta.nisn,
-      nama: formPeserta.nama,
-      nilai: nilaiNum,
-      statusUjian: nilaiNum === 0 ? "Belum Mengerjakan" : nilaiNum < 70 ? "Perlu Remidial" : "Selesai",
-    }
-    setPesertaList((prev) => [...prev, newPeserta])
-    setFormPeserta({ nisn: "", nama: "", nilai: "" })
-    setOpenAddPesertaModal(false)
-  }
-
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -223,7 +166,6 @@ export default function SoalUjianPage() {
               )}
             </>
           ) : (
-            /* LINK DIPAKAI LANGSUNG DENGAN CLASS BUTTON */
             <Link
               href="/dashboard/soal-ujian/create"
               className={buttonVariants({ variant: "default" })}
@@ -248,7 +190,6 @@ export default function SoalUjianPage() {
 
         {!selectedUjian && (
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            {/* HANDLING VALUE STRING | NULL UNTUK TS BASE-UI */}
             <Select value={tahunAjaran} onValueChange={(val) => val && setTahunAjaran(val)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Tahun Ajaran" />
@@ -293,7 +234,7 @@ export default function SoalUjianPage() {
                           : col === "jenisUjian"
                           ? "Jenis"
                           : col === "kelas"
-                          ? "Kelas"
+                          ? "Distribusi Kelas"
                           : col === "tahunAjaran"
                           ? "Tahun Ajaran"
                           : col === "semester"
@@ -320,7 +261,22 @@ export default function SoalUjianPage() {
                       <TableCell className="font-semibold">{item.namaUjian}</TableCell>
                       <TableCell>{item.mataPelajaran}</TableCell>
                       <TableCell><Badge variant="outline">{item.jenisUjian}</Badge></TableCell>
-                      <TableCell>{item.kelas}</TableCell>
+                      
+                      {/* TAMPILAN BADGE KELAS MULTIPLE / SINGLE */}
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
+                          {item.kelas.split(",").map((k, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="secondary"
+                              className="text-[11px] font-medium bg-blue-100/50 text-foreground hover:bg-muted border"
+                            >
+                              {k.trim()}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+
                       <TableCell>{item.tahunAjaran}</TableCell>
                       <TableCell>{item.semester}</TableCell>
                       <TableCell>
@@ -350,18 +306,8 @@ export default function SoalUjianPage() {
                             className={buttonVariants({ variant: "outline", size: "icon", className: "h-8 w-8 text-foreground" })}
                             title="Edit Soal & Config"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Edit className="h-4 w-4" />
                           </Link>
-
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 text-foreground"
-                            title="Lihat Nilai Peserta"
-                            onClick={() => handleViewNilai(item)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -485,92 +431,6 @@ export default function SoalUjianPage() {
           </div>
         </div>
       </div>
-
-      {/* MODAL TAMBAH PESERTA */}
-      <Dialog open={openAddPesertaModal} onOpenChange={setOpenAddPesertaModal}>
-        <DialogContent className="sm:max-w-[420px]">
-          <form onSubmit={handleSavePeserta} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle>Tambah Peserta Ujian</DialogTitle>
-              <DialogDescription>
-                Daftarkan peserta ujian ke {selectedUjian?.namaUjian}.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-2">
-              <div className="grid gap-2">
-                <Label htmlFor="nisn">NISN</Label>
-                <Input
-                  id="nisn"
-                  placeholder="Contoh: 0051234009"
-                  value={formPeserta.nisn}
-                  onChange={(e) => setFormPeserta({ ...formPeserta, nisn: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="namaSiswa">Nama Peserta</Label>
-                <Input
-                  id="namaSiswa"
-                  placeholder="Masukkan nama peserta"
-                  value={formPeserta.nama}
-                  onChange={(e) => setFormPeserta({ ...formPeserta, nama: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="nilai">Nilai Akhir (Opsional)</Label>
-                <Input
-                  id="nilai"
-                  type="number"
-                  placeholder="0"
-                  value={formPeserta.nilai}
-                  onChange={(e) => setFormPeserta({ ...formPeserta, nilai: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpenAddPesertaModal(false)}>
-                Batal
-              </Button>
-              <Button type="submit">Simpan</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL PUBLISH UJIAN */}
-      <Dialog open={openPublishModal} onOpenChange={setOpenPublishModal}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Terbitkan Paket Ujian</DialogTitle>
-            <DialogDescription>
-              Ujian {selectedUjian?.namaUjian} akan diubah statusnya menjadi **Siap Ujian**.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="grid gap-2">
-              <Label>Mata Pelajaran & Kelas</Label>
-              <Input value={`${selectedUjian?.mataPelajaran || ""} (${selectedUjian?.kelas || ""})`} disabled />
-            </div>
-            <div className="grid gap-2">
-              <Label>Tahun Ajaran & Semester</Label>
-              <Input value={`${selectedUjian?.tahunAjaran || ""} - Semester ${selectedUjian?.semester || ""}`} disabled />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpenPublishModal(false)}>
-              Batal
-            </Button>
-            <Button type="button" onClick={handlePublishAll}>
-              Terbitkan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

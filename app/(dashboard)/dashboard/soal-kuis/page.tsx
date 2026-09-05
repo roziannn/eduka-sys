@@ -11,9 +11,9 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Eye,
   KeyRound,
   Send,
+  Edit,
 } from "lucide-react"
 
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -49,18 +49,6 @@ const initialKuisData: SoalKuis[] = [
   { id: "k-2", judulKuis: "Kuis Fisika - Hukum Newton", mataPelajaran: "Fisika", tingkat: "XI", jumlahSoal: 20, durasiMenit: 45, token: "FSK11Z", status: "Draft" },
   { id: "k-3", judulKuis: "Kuis B. Indonesia - Teks LHO", mataPelajaran: "Bahasa Indonesia", tingkat: "X", jumlahSoal: 10, durasiMenit: 20, token: "BIND10", status: "Selesai" },
 ]
-
-const initialPesertaMap: Record<string, PesertaKuis[]> = {
-  "k-1": [
-    { id: "p-1", nisn: "0051234001", nama: "Ahmad Rizky", nilai: 88, status: "Selesai" },
-    { id: "p-2", nisn: "0051234002", nama: "Amanda Citra", nilai: 65, status: "Selesai" },
-    { id: "p-3", nisn: "0051234003", nama: "Bagas Pratama", nilai: 0, status: "Belum Mengerjakan" },
-  ],
-  "k-2": [
-    { id: "p-4", nisn: "0051234004", nama: "Dina Larasati", nilai: 95, status: "Selesai" },
-    { id: "p-5", nisn: "0051234005", nama: "Eko Wijaya", nilai: 78, status: "Selesai" },
-  ],
-}
 
 export default function SoalKuisPage() {
   const [kuisData, setKuisData] = React.useState<SoalKuis[]>(initialKuisData)
@@ -143,43 +131,10 @@ export default function SoalKuisPage() {
   const paginatedKuis = processedKuisData.slice((page - 1) * pageSize, page * pageSize)
   const paginatedPeserta = processedPesertaData.slice((page - 1) * pageSize, page * pageSize)
 
-  // Handlers
-  const handleViewNilai = (kuis: SoalKuis) => {
-    setSelectedKuis(kuis)
-    setPesertaList(initialPesertaMap[kuis.id] || [])
-    setSearch("")
-    setPage(1)
-  }
-
   const handleBackToKuis = () => {
     setSelectedKuis(null)
     setSearch("")
     setPage(1)
-  }
-
-  const handlePublishKuis = () => {
-    if (selectedKuis) {
-      setKuisData((prev) =>
-        prev.map((k) => (k.id === selectedKuis.id ? { ...k, status: "Dipublikasikan" } : k))
-      )
-      setSelectedKuis((prev) => (prev ? { ...prev, status: "Dipublikasikan" } : null))
-    }
-    setOpenPublishModal(false)
-  }
-
-  const handleSavePeserta = (e: React.FormEvent) => {
-    e.preventDefault()
-    const nilaiNum = Number(formPeserta.nilai) || 0
-    const newPeserta: PesertaKuis = {
-      id: `p-${Date.now()}`,
-      nisn: formPeserta.nisn,
-      nama: formPeserta.nama,
-      nilai: nilaiNum,
-      status: nilaiNum === 0 ? "Belum Mengerjakan" : "Selesai",
-    }
-    setPesertaList((prev) => [...prev, newPeserta])
-    setFormPeserta({ nisn: "", nama: "", nilai: "" })
-    setOpenAddPesertaModal(false)
   }
 
   return (
@@ -325,18 +280,8 @@ export default function SoalKuisPage() {
                             className={buttonVariants({ variant: "outline", size: "icon", className: "h-8 w-8 text-foreground" })}
                             title="Edit Kuis"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Edit className="h-4 w-4" />
                           </Link>
-
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 text-foreground"
-                            title="Lihat Peserta & Hasil"
-                            onClick={() => handleViewNilai(item)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -458,88 +403,6 @@ export default function SoalKuisPage() {
           </div>
         </div>
       </div>
-
-      {/* MODAL TAMBAH PESERTA */}
-      <Dialog open={openAddPesertaModal} onOpenChange={setOpenAddPesertaModal}>
-        <DialogContent className="sm:max-w-[420px]">
-          <form onSubmit={handleSavePeserta} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle>Tambah Peserta Kuis</DialogTitle>
-              <DialogDescription>
-                Daftarkan peserta ke kuis: {selectedKuis?.judulKuis}.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-2">
-              <div className="grid gap-2">
-                <Label htmlFor="nisn">NISN / ID Siswa</Label>
-                <Input
-                  id="nisn"
-                  placeholder="Contoh: 0051234009"
-                  value={formPeserta.nisn}
-                  onChange={(e) => setFormPeserta({ ...formPeserta, nisn: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="namaSiswa">Nama Peserta</Label>
-                <Input
-                  id="namaSiswa"
-                  placeholder="Masukkan nama peserta"
-                  value={formPeserta.nama}
-                  onChange={(e) => setFormPeserta({ ...formPeserta, nama: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="nilai">Skor Kuis (Opsional)</Label>
-                <Input
-                  id="nilai"
-                  type="number"
-                  placeholder="0"
-                  value={formPeserta.nilai}
-                  onChange={(e) => setFormPeserta({ ...formPeserta, nilai: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpenAddPesertaModal(false)}>
-                Batal
-              </Button>
-              <Button type="submit">Simpan</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL PUBLISH KUIS */}
-      <Dialog open={openPublishModal} onOpenChange={setOpenPublishModal}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Publikasikan Kuis</DialogTitle>
-            <DialogDescription>
-              Kuis {selectedKuis?.judulKuis} akan siap dikerjakan oleh siswa.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="grid gap-2">
-              <Label>Mata Pelajaran & Kelas</Label>
-              <Input value={`${selectedKuis?.mataPelajaran || ""} (Kelas ${selectedKuis?.tingkat || ""})`} disabled />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpenPublishModal(false)}>
-              Batal
-            </Button>
-            <Button type="button" onClick={handlePublishKuis}>
-              Publikasikan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -2,6 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { driver } from "driver.js"
+import "driver.js/dist/driver.css"
+
 import {
   ArrowLeft,
   Save,
@@ -21,6 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Accordion,
   AccordionContent,
@@ -45,7 +49,7 @@ interface SoalItem {
 
 const listMapel = ["Matematika", "Bahasa Indonesia", "Bahasa Inggris", "Fisika", "Kimia", "Biologi"]
 const listJenisUjian = ["UH", "UTS", "UAS", "US"]
-const listKelas = ["X IPA 1", "X IPS 1", "XI IPA 2", "XII IPA 1"]
+const listKelas = ["X IPA", "X IPS", "XI IPA", "XI IPS", "XII IPA", "XII IPS"]
 
 export default function CreateUjianPage() {
   const router = useRouter()
@@ -54,7 +58,7 @@ export default function CreateUjianPage() {
   const [namaUjian, setNamaUjian] = React.useState("")
   const [mataPelajaran, setMataPelajaran] = React.useState(listMapel[0])
   const [jenisUjian, setJenisUjian] = React.useState("UTS")
-  const [kelas, setKelas] = React.useState(listKelas[0])
+  const [targetKelas, setTargetKelas] = React.useState<string[]>(["X IPA"])
   const [tahunAjaran, setTahunAjaran] = React.useState("2025/2026")
   const [semester, setSemester] = React.useState("Genap")
   const [durasiMenit, setDurasiMenit] = React.useState(90)
@@ -81,10 +85,89 @@ export default function CreateUjianPage() {
     },
   ])
 
+  // --- KONFIGURASI DRIVER.JS (GUIDED TOUR SELALU TAMPIL) ---
+  const startTour = React.useCallback(() => {
+    const driverObj = driver({
+      showProgress: true,
+      animate: true,
+      allowClose: true,
+      showButtons: ["next", "previous", "close"],
+      nextBtnText: "Lanjut",
+      prevBtnText: "Kembali",
+      doneBtnText: "Selesai",
+      steps: [
+        {
+          element: "#tour-card-info",
+          popover: {
+            title: "Konfigurasi Ujian",
+            description: "Isi informasi dasar ujian seperti Nama Ujian, Mapel, Jenis, dan Target Kelas di panel ini.",
+            side: "right",
+            align: "start",
+          },
+        },
+        {
+          element: "#tour-distribusi-kelas",
+          popover: {
+            title: "Distribusi Kelas",
+            description: "Pilih satu atau beberapa kelas target yang akan mengikuti ujian ini.",
+            side: "right",
+            align: "start",
+          },
+        },
+        {
+          element: "#tour-tombol-tambah-soal",
+          popover: {
+            title: "Tambah Butir Soal",
+            description: "Klik tombol ini untuk menambah butir soal Pilihan Ganda atau Essai baru.",
+            side: "bottom",
+            align: "end",
+          },
+        },
+        {
+          element: "#tour-daftar-soal",
+          popover: {
+            title: "Editor Soal",
+            description: "Tuliskan pertanyaan, atur bobot, isi opsi jawaban, dan tentukan kunci jawaban di sini.",
+            side: "left",
+            align: "start",
+          },
+        },
+        {
+          element: "#tour-action-buttons",
+          popover: {
+            title: "Aksi Ujian",
+            description: "Anda bisa melihat Preview tampilan soal, menyimpan sebagai Draft, atau menerbitkan ujian jika sudah siap.",
+            side: "bottom",
+            align: "end",
+          },
+        },
+      ],
+    })
+
+    driverObj.drive()
+  }, [])
+
+  // Jalankan Tour Otomatis SETIAP KALI Halaman Dimuat / Di-refresh
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      startTour()
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [startTour])
+
   // Total Bobot Keseluruhan
   const totalBobot = React.useMemo(() => {
     return soalList.reduce((acc, curr) => acc + (Number(curr.bobot) || 0), 0)
   }, [soalList])
+
+  // --- HANDLER MULTIPLE KELAS ---
+  const handleToggleKelas = (itemKelas: string) => {
+    setTargetKelas((prev) =>
+      prev.includes(itemKelas)
+        ? prev.filter((k) => k !== itemKelas)
+        : [...prev, itemKelas]
+    )
+  }
 
   // --- HANDLERS SOAL ---
   const handleAddSoal = (tipe: "Pilihan Ganda" | "Essai") => {
@@ -146,7 +229,7 @@ export default function CreateUjianPage() {
       namaUjian,
       mataPelajaran,
       jenisUjian,
-      kelas,
+      targetKelas,
       tahunAjaran,
       semester,
       durasiMenit,
@@ -162,7 +245,7 @@ export default function CreateUjianPage() {
       namaUjian,
       mataPelajaran,
       jenisUjian,
-      kelas,
+      targetKelas,
       tahunAjaran,
       semester,
       durasiMenit,
@@ -189,7 +272,7 @@ export default function CreateUjianPage() {
           </Button>
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
-              <BookOpen className="h-5 w-5" /> Buat Paket Ujian Baru
+              Buat Soal Ujian Baru
             </h1>
             <p className="text-sm text-muted-foreground">
               Lengkapi konfigurasi ujian dan tambahkan butir soal awal.
@@ -197,7 +280,11 @@ export default function CreateUjianPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div id="tour-action-buttons" className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" title="Bantuan Tour" onClick={startTour}>
+            <HelpCircle className="h-5 w-5 text-muted-foreground" />
+          </Button>
+
           <Button variant="outline" onClick={handleOpenPreviewPage}>
             <Eye className="mr-2 h-4 w-4" /> Preview Soal
           </Button>
@@ -213,27 +300,33 @@ export default function CreateUjianPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Kolom Kiri: Sticky Card */}
         <div className="lg:col-span-1 lg:sticky lg:top-6 self-start space-y-6">
-          <Card>
+          <Card id="tour-card-info">
             <CardHeader>
-              <CardTitle className="text-lg">Informasi & Pengaturan Ujian</CardTitle>
-              <CardDescription>Pengaturan dasar identitas, aturan waktu, dan KKM peserta.</CardDescription>
+              <CardTitle className="text-lg">Informasi Ujian</CardTitle>
+              <CardDescription>
+                Pengaturan dan informasi ujian. <span className="text-destructive">*</span> 
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="namaUjian">Nama Ujian</Label>
+                <Label htmlFor="namaUjian">
+                  Nama Ujian <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="namaUjian"
                   placeholder="Contoh: UTS Matematika Wajib X"
                   value={namaUjian}
                   onChange={(e) => setNamaUjian(e.target.value)}
+                  required
                 />
               </div>
 
-              {/* SEBARIS TIGA FIELD YANG DIRAPIKAN DENGAN FLEX & PROPORSI PAS */}
-              <div className="flex items-center gap-2">
-                {/* Mata Pelajaran mengambil sisa ruang paling besar */}
-                <div className="grid gap-2 flex-1 min-w-0">
-                  <Label className="truncate">Mata Pelajaran</Label>
+              {/* MATA PELAJARAN DAN JENIS UJIAN */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 grid gap-2 min-w-0">
+                  <Label className="truncate">
+                    Mata Pelajaran <span className="text-destructive">*</span>
+                  </Label>
                   <Select value={mataPelajaran} onValueChange={(v) => v && setMataPelajaran(v)}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Pilih Mapel" />
@@ -248,9 +341,10 @@ export default function CreateUjianPage() {
                   </Select>
                 </div>
 
-                {/* Jenis Ujian dengan lebar tetap pas */}
-                <div className="grid gap-2 w-[90px] shrink-0">
-                  <Label className="whitespace-nowrap">Jenis</Label>
+                <div className="col-span-1 grid gap-2">
+                  <Label className="whitespace-nowrap">
+                    Jenis <span className="text-destructive">*</span>
+                  </Label>
                   <Select value={jenisUjian} onValueChange={(v) => v && setJenisUjian(v)}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -264,54 +358,74 @@ export default function CreateUjianPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                {/* Target Kelas dengan lebar tetap pas */}
-                <div className="grid gap-2 w-[110px] shrink-0">
-                  <Label className="whitespace-nowrap">Target Kelas</Label>
-                  <Select value={kelas} onValueChange={(v) => v && setKelas(v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {listKelas.map((k) => (
-                        <SelectItem key={k} value={k}>
+              {/* DISTRIBUSI KELAS */}
+              <div id="tour-distribusi-kelas" className="grid gap-2">
+                <Label>
+                  Distribusi Kelas <span className="text-destructive">*</span>
+                </Label>
+                <div className="grid grid-cols-2 gap-2 bg-muted/30 p-3 rounded-lg border">
+                  {listKelas.map((k) => {
+                    const isChecked = targetKelas.includes(k)
+                    return (
+                      <div key={k} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`kelas-${k}`}
+                          checked={isChecked}
+                          onCheckedChange={() => handleToggleKelas(k)}
+                        />
+                        <Label
+                          htmlFor={`kelas-${k}`}
+                          className="text-xs font-normal cursor-pointer select-none"
+                        >
                           {k}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </Label>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
-                  <Label htmlFor="tahun">Tahun Ajaran</Label>
-                  <Input id="tahun" value={tahunAjaran} onChange={(e) => setTahunAjaran(e.target.value)} />
+                  <Label htmlFor="tahun">
+                    Tahun Ajaran <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="tahun" value={tahunAjaran} onChange={(e) => setTahunAjaran(e.target.value)} required />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="semester">Semester</Label>
-                  <Input id="semester" value={semester} onChange={(e) => setSemester(e.target.value)} />
+                  <Label htmlFor="semester">
+                    Semester <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="semester" value={semester} onChange={(e) => setSemester(e.target.value)} required />
                 </div>
               </div>
 
               {/* DURASI DAN KKM */}
               <div className="grid grid-cols-2 gap-2 pt-2 border-t">
                 <div className="grid gap-2">
-                  <Label htmlFor="durasi">Durasi (Menit)</Label>
+                  <Label htmlFor="durasi">
+                    Durasi (Menit) <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     id="durasi"
                     type="number"
                     value={durasiMenit}
                     onChange={(e) => setDurasiMenit(Number(e.target.value))}
+                    required
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="kkm">Nilai KKM</Label>
+                  <Label htmlFor="kkm">
+                    Nilai KKM <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     id="kkm"
                     type="number"
                     value={kkm}
                     onChange={(e) => setKkm(Number(e.target.value))}
+                    required
                   />
                 </div>
               </div>
@@ -344,7 +458,7 @@ export default function CreateUjianPage() {
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <HelpCircle className="h-5 w-5" /> Daftar Butir Soal ({soalList.length})
             </h2>
-            <div className="flex items-center gap-2">
+            <div id="tour-tombol-tambah-soal" className="flex items-center gap-2">
               <Button size="sm" onClick={() => handleAddSoal("Pilihan Ganda")}>
                 <Plus className="mr-1 h-3.5 w-3.5" /> PG Baru
               </Button>
@@ -354,7 +468,7 @@ export default function CreateUjianPage() {
             </div>
           </div>
 
-          <div className="max-h-[calc(100vh-180px)] overflow-y-auto pr-2 space-y-4 rounded-md">
+          <div id="tour-daftar-soal" className="max-h-[calc(100vh-180px)] overflow-y-auto pr-2 space-y-4 rounded-md">
             <Accordion
               {...({
                 type: "multiple",
@@ -383,7 +497,7 @@ export default function CreateUjianPage() {
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md border">
                         <Label htmlFor={`bobot-${soal.id}`} className="text-xs text-muted-foreground whitespace-nowrap">
-                          Bobot:
+                          Bobot <span className="text-destructive">*</span>:
                         </Label>
                         <Input
                           id={`bobot-${soal.id}`}
@@ -393,6 +507,7 @@ export default function CreateUjianPage() {
                           onChange={(e) => handleUpdateBobot(sIdx, Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
                           className="w-16 h-7 text-xs px-2 text-center bg-background"
+                          required
                         />
                       </div>
 
@@ -415,19 +530,22 @@ export default function CreateUjianPage() {
 
                   <AccordionContent className="pt-2 pb-4 space-y-4 border-t mt-1">
                     <div className="grid gap-2 pt-1 px-1">
-                      <Label>Pertanyaan Soal</Label>
+                      <Label>
+                        Pertanyaan Soal <span className="text-destructive">*</span>
+                      </Label>
                       <Textarea
                         placeholder="Tuliskan pertanyaan soal di sini..."
                         value={soal.pertanyaan}
                         onChange={(e) => handleUpdateSoalPertanyaan(sIdx, e.target.value)}
                         className="min-h-[90px]"
+                        required
                       />
                     </div>
 
                     {soal.tipe === "Pilihan Ganda" && (
                       <div className="space-y-3 pt-2">
                         <Label className="text-xs text-muted-foreground">
-                          Opsi Jawaban (Pilih salah satu sebagai kunci jawaban):
+                          Opsi Jawaban <span className="text-destructive">*</span>
                         </Label>
                         <div className="space-y-2">
                           {soal.opsi.map((opsi, oIdx) => {
@@ -449,6 +567,7 @@ export default function CreateUjianPage() {
                                   placeholder={`Pilihan ${labelOpsi}...`}
                                   value={opsi.teks}
                                   onChange={(e) => handleUpdateOpsiTeks(sIdx, oIdx, e.target.value)}
+                                  required
                                 />
                               </div>
                             )
