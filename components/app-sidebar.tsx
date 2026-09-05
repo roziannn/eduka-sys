@@ -1,10 +1,8 @@
 "use client"
 
 import * as React from "react"
-import Image from "next/image"
-
+import { createClient } from "@/utils/supabase/client"
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -19,29 +17,12 @@ import {
 import {
   LayoutDashboardIcon,
   DatabaseIcon,
-  GraduationCapIcon,
-  HelpCircleIcon,
   FileCheck2Icon,
-  ClipboardListIcon,
-  FileTextIcon,
-  LifeBuoyIcon,
-  SendIcon,
-  BookOpenIcon,
-  CalendarDaysIcon,
-  UsersIcon,
-  UserCheckIcon,
-  SparklesIcon,
   Settings2,
   Leaf,
 } from "lucide-react"
 
 const data = {
-  user: {
-    name: "Admin Eduka",
-    email: "admin@eduka.id",
-    avatar: "/avatars/admin.jpg",
-  },
-  // Menu Utama Navigasi LMS
   navMain: [
     {
       title: "Dashboard",
@@ -70,124 +51,87 @@ const data = {
           title: "Data Pengguna",
           url: "/dashboard/master/data-pengguna",
         },
-         {
+        {
           title: "Template e-Rapor",
           url: "/dashboard/master/template-rapor",
         },
       ],
     },
-    // {
-    //   title: "Manajemen Akademik",
-    //   url: "#",
-    //   icon: <GraduationCapIcon />,
-    //   items: [
-    //     {
-    //       title: "Penugasan Guru",
-    //       url: "/dashboard/manajemen-akademik/penugasan-guru",
-    //     },
-    //     {
-    //       title: "Rombel & Enrollment",
-    //       url: "/dashboard/manajemen-akademik/rombel-enrollment",
-    //     },
-    //     {
-    //       title: "Wali Kelas",
-    //       url: "/dashboard/manajemen-akademik/wali-kelas",
-    //     },
-    //   ],
-    // },
     {
-    title: "Ujian dan Kuis",
-    url: "#",
-    icon: <FileCheck2Icon />,
-    items: [
-      {
-        title: "Soal Ujian",
-        url: "/dashboard/soal-ujian",
-      },
-       {
-        title: "Soal Kuis",
-        url: "/dashboard/soal-kuis",
-      },
-      // {
-      //   title: "Jadwal UTS & UAS",
-      //   url: "/dashboard/ujian/jadwal-uts-uas",
-      // },
-      // {
-      //   title: "Jadwal Kuis Harian",
-      //   url: "/dashboard/ujian/jadwal-kuis",
-      // },
-      {
-        title: "Hasil Ujian",
-        url: "/dashboard/hasil-ujian",
-      },
-      {
-        title: "Hasil Kuis",
-        url: "/dashboard/hasil-kuis",
-      },
-    ],
-  },
-  {
-    title: "Pengaturan",
-    url: "#",
-    icon: <Settings2 />,
-    items: [
-      {
-        title: "Menu Aplikasi",
-        url: "/pengaturan/menu-aplikasi",
-      },
-       {
-        title: "Hak Akses",
-        url: "/pengaturan/hak-akses",
-      },
-    ],
-  },
-    // {
-    //   title: "Rapor Siswa",
-    //   url: "/dashboard/rapor-siswa",
-    //   icon: <FileTextIcon />,
-    // },
+      title: "Ujian dan Kuis",
+      url: "#",
+      icon: <FileCheck2Icon />,
+      items: [
+        {
+          title: "Soal Ujian",
+          url: "/dashboard/soal-ujian",
+        },
+        {
+          title: "Soal Kuis",
+          url: "/dashboard/soal-kuis",
+        },
+        {
+          title: "Hasil Ujian",
+          url: "/dashboard/hasil-ujian",
+        },
+        {
+          title: "Hasil Kuis",
+          url: "/dashboard/hasil-kuis",
+        },
+      ],
+    },
+    {
+      title: "Pengaturan",
+      url: "#",
+      icon: <Settings2 />,
+      items: [
+        {
+          title: "Akun Pengguna",
+          url: "/pengaturan/akun-pengguna",
+        },
+        {
+          title: "Hak Akses",
+          url: "/pengaturan/hak-akses",
+        },
+         {
+          title: "Menu Aplikasi",
+          url: "/pengaturan/menu-aplikasi",
+        },
+      ],
+    },
   ],
-  // Shortcut Menu Cepat
-  projects: [
-    // {
-    //   name: "Jadwal Mengajar",
-    //   url: "/dashboard/jadwal",
-    //   icon: <CalendarDaysIcon />,
-    // },
-    // {
-    //   name: "Rekap Kehadiran",
-    //   url: "/dashboard/rekap-absensi",
-    //   icon: <ClipboardListIcon />,
-    // },
-    // {
-    //   name: "Panduan Penggunaan",
-    //   url: "/dashboard/panduan",
-    //   icon: <BookOpenIcon />,
-    // },
-  ],
-  navSecondary: [
-    // {
-    //   title: "Bantuan",
-    //   url: "#",
-    //   icon: <LifeBuoyIcon />,
-    // },
-    // {
-    //   title: "Kirim Masukan",
-    //   url: "#",
-    //   icon: <SendIcon />,
-    // },
-  ],
+  navSecondary: [],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [user, setUser] = React.useState({
+    name: "Admin Eduka",
+    email: "admin@eduka.id",
+    avatar: "/avatars/admin.jpg",
+  })
+
+  // Ambil data user dari Supabase Client Session
+  React.useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user: supabaseUser } }) => {
+      if (supabaseUser) {
+        setUser({
+          name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split("@")[0] || "User",
+          email: supabaseUser.email || "",
+          avatar: supabaseUser.user_metadata?.avatar_url || "/avatars/admin.jpg",
+        })
+      }
+    })
+  }, [])
+
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-           <SidebarMenuButton size="lg" render={<a href="/dashboard" />}>
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
-                <Leaf className="size-5 fill-blue-500/20" />
+            <SidebarMenuButton size="lg" render={<a href="/dashboard" />}>
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+                <Leaf className="size-5 fill-emerald-500/20" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-bold text-foreground">Eduka</span>
@@ -200,12 +144,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent>
         <NavMain items={data.navMain} />
-        {/* <NavProjects projects={data.projects} /> */}
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   )

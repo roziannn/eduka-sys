@@ -1,5 +1,6 @@
 "use client"
 
+import { logout } from "@/app/login/actions"
 import {
   Avatar,
   AvatarFallback,
@@ -20,7 +21,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, LogOutIcon, LogOut } from "lucide-react"
 
 export function NavUser({
   user,
@@ -98,11 +99,10 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOutIcon
-              />
+            <DropdownMenuItem onClick={async () => await logout()}>
+            <LogOut className="mr-2 h-4 w-4" />
               Log out
-            </DropdownMenuItem>
+          </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
