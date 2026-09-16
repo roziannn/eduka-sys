@@ -12,7 +12,6 @@ import {
   Trash2,
   HelpCircle,
   CheckCircle2,
-  BookOpen,
   Eye,
 } from "lucide-react"
 
@@ -31,6 +30,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import RichTextEditor from "@/components/rich-text-editor"
 
 // --- TYPES ---
 interface OpsiJawaban {
@@ -45,6 +45,15 @@ interface SoalItem {
   tipe: "Pilihan Ganda" | "Essai"
   bobot: number
   opsi: OpsiJawaban[]
+}
+
+// Helper untuk membersihkan tag HTML & entities agar preview header berupa teks polos
+const stripHtml = (html: string) => {
+  if (!html) return ""
+  return html
+    .replace(/<[^>]*>/g, "") // Hapus semua tag HTML
+    .replace(/&nbsp;/g, " ") // Ganti spasi HTML
+    .trim()
 }
 
 const listMapel = ["Matematika", "Bahasa Indonesia", "Bahasa Inggris", "Fisika", "Kimia", "Biologi"]
@@ -85,7 +94,7 @@ export default function CreateUjianPage() {
     },
   ])
 
-  // --- KONFIGURASI DRIVER.JS (GUIDED TOUR SELALU TAMPIL) ---
+  // --- KONFIGURASI DRIVER.JS ---
   const startTour = React.useCallback(() => {
     const driverObj = driver({
       showProgress: true,
@@ -147,7 +156,6 @@ export default function CreateUjianPage() {
     driverObj.drive()
   }, [])
 
-  // Jalankan Tour Otomatis SETIAP KALI Halaman Dimuat / Di-refresh
   React.useEffect(() => {
     const timer = setTimeout(() => {
       startTour()
@@ -155,12 +163,10 @@ export default function CreateUjianPage() {
     return () => clearTimeout(timer)
   }, [startTour])
 
-  // Total Bobot Keseluruhan
   const totalBobot = React.useMemo(() => {
     return soalList.reduce((acc, curr) => acc + (Number(curr.bobot) || 0), 0)
   }, [soalList])
 
-  // --- HANDLER MULTIPLE KELAS ---
   const handleToggleKelas = (itemKelas: string) => {
     setTargetKelas((prev) =>
       prev.includes(itemKelas)
@@ -169,7 +175,6 @@ export default function CreateUjianPage() {
     )
   }
 
-  // --- HANDLERS SOAL ---
   const handleAddSoal = (tipe: "Pilihan Ganda" | "Essai") => {
     const newId = `s-${Date.now()}`
     const newSoal: SoalItem = {
@@ -477,107 +482,109 @@ export default function CreateUjianPage() {
               } as React.ComponentProps<typeof Accordion>)}
               className="space-y-4"
             >
-              {soalList.map((soal, sIdx) => (
-                <AccordionItem
-                  key={soal.id}
-                  value={soal.id}
-                  className="border rounded-lg bg-card px-4 py-1"
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <AccordionTrigger className="hover:no-underline py-3 flex-1">
-                      <div className="flex items-center gap-2 text-left">
-                        <Badge variant="outline">Nomor {sIdx + 1}</Badge>
-                        <Badge>{soal.tipe}</Badge>
-                        <span className="text-sm font-normal text-muted-foreground line-clamp-1 max-w-[150px] sm:max-w-[240px]">
-                          {soal.pertanyaan || "Pertanyaan belum diisi..."}
-                        </span>
-                      </div>
-                    </AccordionTrigger>
+              {soalList.map((soal, sIdx) => {
+                const plainPertanyaan = stripHtml(soal.pertanyaan)
 
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md border">
-                        <Label htmlFor={`bobot-${soal.id}`} className="text-xs text-muted-foreground whitespace-nowrap">
-                          Bobot <span className="text-destructive">*</span>:
+                return (
+                  <AccordionItem
+                    key={soal.id}
+                    value={soal.id}
+                    className="border rounded-lg bg-card px-4 py-1"
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <AccordionTrigger className="hover:no-underline py-3 flex-1">
+                        <div className="flex items-center gap-2 text-left">
+                          <Badge variant="outline">Nomor {sIdx + 1}</Badge>
+                          <Badge>{soal.tipe}</Badge>
+                          <span className="text-sm font-normal text-muted-foreground line-clamp-1 max-w-[150px] sm:max-w-[240px]">
+                            {plainPertanyaan || "Pertanyaan belum diisi..."}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md border">
+                          <Label htmlFor={`bobot-${soal.id}`} className="text-xs text-muted-foreground whitespace-nowrap">
+                            Bobot <span className="text-destructive">*</span>:
+                          </Label>
+                          <Input
+                            id={`bobot-${soal.id}`}
+                            type="number"
+                            min={0}
+                            value={soal.bobot}
+                            onChange={(e) => handleUpdateBobot(sIdx, Number(e.target.value))}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-16 h-7 text-xs px-2 text-center bg-background"
+                            required
+                          />
+                        </div>
+
+                        {soalList.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleRemoveSoal(sIdx)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <AccordionContent className="pt-2 pb-4 space-y-4 border-t mt-1">
+                      <div className="grid gap-2 pt-1 px-1">
+                        <Label>
+                          Pertanyaan Soal <span className="text-destructive">*</span>
                         </Label>
-                        <Input
-                          id={`bobot-${soal.id}`}
-                          type="number"
-                          min={0}
-                          value={soal.bobot}
-                          onChange={(e) => handleUpdateBobot(sIdx, Number(e.target.value))}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-16 h-7 text-xs px-2 text-center bg-background"
-                          required
+                        <RichTextEditor
+                          placeholder="Tuliskan pertanyaan soal di sini..."
+                          value={soal.pertanyaan}
+                          onChange={(html) => handleUpdateSoalPertanyaan(sIdx, html)}
                         />
                       </div>
 
-                      {soalList.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRemoveSoal(sIdx)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <AccordionContent className="pt-2 pb-4 space-y-4 border-t mt-1">
-                    <div className="grid gap-2 pt-1 px-1">
-                      <Label>
-                        Pertanyaan Soal <span className="text-destructive">*</span>
-                      </Label>
-                      <Textarea
-                        placeholder="Tuliskan pertanyaan soal di sini..."
-                        value={soal.pertanyaan}
-                        onChange={(e) => handleUpdateSoalPertanyaan(sIdx, e.target.value)}
-                        className="min-h-[90px]"
-                        required
-                      />
-                    </div>
-
-                    {soal.tipe === "Pilihan Ganda" && (
-                      <div className="space-y-3 pt-2">
-                        <Label className="text-xs text-muted-foreground">
-                          Opsi Jawaban <span className="text-destructive">*</span>
-                        </Label>
-                        <div className="space-y-2">
-                          {soal.opsi.map((opsi, oIdx) => {
-                            const labelOpsi = String.fromCharCode(65 + oIdx)
-                            return (
-                              <div key={opsi.id} className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant={opsi.isBenar ? "default" : "outline"}
-                                  className={`w-9 h-9 p-0 shrink-0 ${
-                                    opsi.isBenar ? "bg-emerald-600 hover:bg-emerald-700" : ""
-                                  }`}
-                                  onClick={() => handleSetOpsiBenar(sIdx, oIdx)}
-                                >
-                                  {labelOpsi}
-                                </Button>
-                                <Input
-                                  placeholder={`Pilihan ${labelOpsi}...`}
-                                  value={opsi.teks}
-                                  onChange={(e) => handleUpdateOpsiTeks(sIdx, oIdx, e.target.value)}
-                                  required
-                                />
-                              </div>
-                            )
-                          })}
+                      {soal.tipe === "Pilihan Ganda" && (
+                        <div className="space-y-3 pt-2">
+                          <Label className="text-xs text-muted-foreground">
+                            Opsi Jawaban <span className="text-destructive">*</span>
+                          </Label>
+                          <div className="space-y-2">
+                            {soal.opsi.map((opsi, oIdx) => {
+                              const labelOpsi = String.fromCharCode(65 + oIdx)
+                              return (
+                                <div key={opsi.id} className="flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={opsi.isBenar ? "default" : "outline"}
+                                    className={`w-9 h-9 p-0 shrink-0 ${
+                                      opsi.isBenar ? "bg-emerald-600 hover:bg-emerald-700" : ""
+                                    }`}
+                                    onClick={() => handleSetOpsiBenar(sIdx, oIdx)}
+                                  >
+                                    {labelOpsi}
+                                  </Button>
+                                  <Input
+                                    placeholder={`Pilihan ${labelOpsi}...`}
+                                    value={opsi.teks}
+                                    onChange={(e) => handleUpdateOpsiTeks(sIdx, oIdx, e.target.value)}
+                                    required
+                                  />
+                                </div>
+                              )
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                )
+              })}
             </Accordion>
           </div>
         </div>
