@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useEditor, EditorContent } from "@tiptap/react"
+import { useEditor, EditorContent, NodeViewWrapper, NodeViewProps, ReactNodeViewRenderer } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import Image from "@tiptap/extension-image"
@@ -19,7 +19,7 @@ import {
   AlignLeft, AlignCenter, AlignRight,
   Table as TableIcon, Plus, Trash2,
   List, ListOrdered, Outdent, Indent,
-  Undo2, Redo2
+  Undo2, Redo2, Loader2, X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -32,6 +32,40 @@ declare module "@tiptap/core" {
     }
   }
 }
+
+// 1. Komponen NodeView untuk Gambar dengan Tombol Hapus Bulat
+const ImageNodeView: React.FC<NodeViewProps> = ({ node, deleteNode }) => {
+  return (
+    <NodeViewWrapper className="relative inline-block my-2 group max-w-full">
+      <img
+        src={node.attrs.src}
+        alt={node.attrs.alt || "Uploaded image"}
+        className="max-w-full h-auto rounded-md"
+      />
+
+      {/* Tombol Bulat Kecil Hapus di Pojok Kanan Atas */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          deleteNode()
+        }}
+        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 shadow-md hover:bg-destructive/90 transition-opacity opacity-0 group-hover:opacity-100 focus:opacity-100"
+        title="Hapus Gambar"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </NodeViewWrapper>
+  )
+}
+
+// 2. Extension Custom Image dengan NodeView Renderer
+const CustomImage = Image.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageNodeView)
+  },
+})
 
 // Custom Extension Indent
 const CustomIndent = Extension.create({
@@ -111,10 +145,18 @@ interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  isError?: boolean //
 }
 
-export default function RichTextEditor({ value, onChange }: RichTextEditorProps) {
+export default function RichTextEditor({ value, onChange, isError }: RichTextEditorProps) {
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0)
+  
+  // Ref untuk input file tersembunyi
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+
+  // State untuk Progress Upload Gambar
+  const [isUploading, setIsUploading] = React.useState(false)
+  const [uploadProgress, setUploadProgress] = React.useState(0)
 
   const editor = useEditor({
     extensions: [
@@ -124,7 +166,7 @@ export default function RichTextEditor({ value, onChange }: RichTextEditorProps)
         },
       }),
       Underline,
-      Image,
+      CustomImage,
       Mathematics,
       CustomIndent,
       TextAlign.configure({
@@ -150,10 +192,51 @@ export default function RichTextEditor({ value, onChange }: RichTextEditorProps)
     return null
   }
 
-  const addImage = () => {
-    const url = window.prompt("Masukkan URL Gambar:")
-    if (url) {
-      editor.chain().focus().setImage({ src: url }).run()
+  // Handle klik tombol Upload Gambar
+  const handleImageClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  // Process Upload File dengan Progress Bar
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    setUploadProgress(0)
+
+    const interval = setInterval(() => {
+      setUploadProgress((prev) => {
+        if (prev >= 90) {
+          clearInterval(interval)
+          return 90
+        }
+        return prev + 15
+      })
+    }, 120)
+
+    try {
+      const imageUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      clearInterval(interval)
+      setUploadProgress(100)
+
+      setTimeout(() => {
+        editor.chain().focus().setImage({ src: imageUrl }).run()
+        setIsUploading(false)
+        setUploadProgress(0)
+        if (fileInputRef.current) fileInputRef.current.value = ""
+      }, 300)
+    } catch (error) {
+      console.error("Gagal mengunggah gambar:", error)
+      clearInterval(interval)
+      setIsUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -172,7 +255,16 @@ export default function RichTextEditor({ value, onChange }: RichTextEditorProps)
 
   return (
     <div className="border border-input rounded-md bg-background overflow-hidden shadow-sm flex flex-col">
-      {/* Toolbar - Dibuat sebaris rapat (flex-nowrap & overflow-x-auto) */}
+      {/* Input File Tersembunyi */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        accept="image/*" 
+        className="hidden" 
+      />
+
+      {/* Toolbar */}
       <div 
         className="flex flex-nowrap items-center gap-0.5 p-1 border-b bg-muted/40 shrink-0 select-none overflow-x-auto scrollbar-none"
         onMouseDown={(e) => e.preventDefault()}
@@ -430,20 +522,28 @@ export default function RichTextEditor({ value, onChange }: RichTextEditorProps)
         >
           <TableIcon className="h-3.5 w-3.5" />
         </Button>
+
+        {/* Tombol Upload Gambar */}
         <Button
           type="button"
           size="sm"
           variant="ghost"
+          disabled={isUploading}
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
-            addImage()
+            handleImageClick()
           }}
           className="h-8.5 w-8.5 p-0 shrink-0"
-          title="Upload / Insert Gambar"
+          title="Upload Gambar"
         >
-          <ImageIcon className="h-3.5 w-3.5" />
+          {isUploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          ) : (
+            <ImageIcon className="h-3.5 w-3.5" />
+          )}
         </Button>
+
         <Button
           type="button"
           size="sm"
@@ -460,9 +560,26 @@ export default function RichTextEditor({ value, onChange }: RichTextEditorProps)
         </Button>
       </div>
 
+      {/* Progress Bar Animasi saat Upload Gambar */}
+      {isUploading && (
+        <div className="w-full bg-muted/60 px-3 py-1.5 border-b flex items-center gap-3">
+          <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden border">
+            <div 
+              className="bg-primary h-full transition-all duration-150 ease-out rounded-full"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+          <span className="text-[10px] font-medium text-muted-foreground w-8 text-right">
+            {uploadProgress}%
+          </span>
+        </div>
+      )}
+
       {/* Area Teks & Editor */}
       <div 
-        className="p-3 bg-background m-2 rounded-md border border-input transition-all flex flex-col focus-within:border-ring focus-within:ring-1 focus-within:ring-ring cursor-text"
+        className={`p-3 bg-background m-2 rounded-md border transition-all flex flex-col focus-within:border-ring focus-within:ring-1 focus-within:ring-ring cursor-text ${
+          isError ? "border-destructive focus-within:border-destructive focus-within:ring-destructive" : "border-input"
+        }`}
         onClick={() => editor.chain().focus().run()}
       >
         <EditorContent 
