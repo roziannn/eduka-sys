@@ -12,15 +12,40 @@ import {
 import { Input } from "@/components/ui/input"
 import { login } from "@/app/login/actions"
 
-type Role = "ADMINISTRATOR" | "GURU" | "SISWA"
+// Nilai ini harus sama dengan normalized_name di tabel CORE_Role
+type Role = "ADMIN" | "TEACHER" | "STUDENT"
+
+const roleOptions = [
+  {
+    id: "TEACHER" as Role,
+    label: "Guru",
+    icon: GraduationCap,
+    placeholder: "guru@sekolah.sch.id",
+  },
+  {
+    id: "STUDENT" as Role,
+    label: "Siswa",
+    icon: UserCheck,
+    placeholder: "siswa@sekolah.sch.id",
+  },
+  {
+    id: "ADMIN" as Role,
+    label: "Admin",
+    icon: Shield,
+    placeholder: "admin@eduka.local",
+  },
+]
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"form">) {
-  const [selectedRole, setSelectedRole] = React.useState<Role>("GURU")
+  const [selectedRole, setSelectedRole] = React.useState<Role>("TEACHER")
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
+
+  const currentRole =
+    roleOptions.find((r) => r.id === selectedRole) ?? roleOptions[0]
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -29,33 +54,25 @@ export function LoginForm({
 
     const formData = new FormData(event.currentTarget)
     // Sisipkan peran yang dipilih ke dalam FormData
-    formData.append("role", selectedRole)
+    formData.set("role", selectedRole)
 
-    const result = await login(formData)
+    try {
+      const result = await login(formData)
 
-    if (result?.error) {
-      setErrorMsg(result.error)
+      if (result?.error) {
+        setErrorMsg(result.error)
+        setLoading(false)
+      }
+      // Kalau sukses, server action melakukan redirect ke /dashboard
+    } catch (err) {
+      // redirect() di server action melempar NEXT_REDIRECT, itu normal
+      const message = err instanceof Error ? err.message : ""
+      if (message.includes("NEXT_REDIRECT")) throw err
+
+      setErrorMsg("Terjadi kesalahan, coba lagi")
       setLoading(false)
     }
   }
-
-  const roleOptions = [
-    {
-      id: "GURU" as Role,
-      label: "Guru",
-      icon: GraduationCap,
-    },
-    {
-      id: "SISWA" as Role,
-      label: "Siswa",
-      icon: UserCheck,
-    },
-    {
-      id: "ADMINISTRATOR" as Role,
-      label: "Admin",
-      icon: Shield,
-    },
-  ]
 
   return (
     <form
@@ -109,19 +126,13 @@ export function LoginForm({
 
         <Field>
           <FieldLabel htmlFor="email">
-            {selectedRole === "SISWA" ? "NISN / Email Siswa" : "Email"}
+            {selectedRole === "STUDENT" ? "Email Siswa" : "Email"}
           </FieldLabel>
           <Input
             id="email"
             name="email"
             type="email"
-            placeholder={
-              selectedRole === "SISWA"
-                ? "siswa@sekolah.sch.id"
-                : selectedRole === "GURU"
-                ? "guru@sekolah.sch.id"
-                : "admin@eduka.id"
-            }
+            placeholder={currentRole.placeholder}
             required
           />
         </Field>
@@ -141,7 +152,7 @@ export function LoginForm({
 
         <Field>
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Logging in..." : `Masuk Sebagai ${selectedRole}`}
+            {loading ? "Logging in..." : `Masuk Sebagai ${currentRole.label}`}
           </Button>
         </Field>
       </FieldGroup>

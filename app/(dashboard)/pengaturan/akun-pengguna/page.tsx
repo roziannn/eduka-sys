@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Plus, KeyRound, Search, Shield, GraduationCap, UserCheck, CheckCircle2, XCircle, Mail, ChevronLeft, ChevronRight, Loader2, Edit } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createNewUser, getUsers, updateUser, resetUserPassword } from "./actions"
+import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
 
 export type RoleType = "ADMINISTRATOR" | "GURU" | "SISWA"
 
@@ -25,14 +25,15 @@ export interface UserAccount {
   lastLogin: string
 }
 
+const USERS_KEY = ["users"]
+
 export default function PengaturanPenggunaPage() {
-  const [users, setUsers] = React.useState<UserAccount[]>([])
-  const [tableLoading, setTableLoading] = React.useState(true)
+  const queryClient = useQueryClient()
+
   const [search, setSearch] = React.useState("")
   const [roleFilter, setRoleFilter] = React.useState<string>("All")
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(5)
-  const [loading, setLoading] = React.useState(false)
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null)
 
   const [openUserModal, setOpenUserModal] = React.useState(false)
@@ -47,21 +48,40 @@ export default function PengaturanPenggunaPage() {
 
   const [newPassword, setNewPassword] = React.useState("")
 
-  const fetchUsersData = React.useCallback(async () => {
-    setTableLoading(true)
-    const res = await getUsers()
-    if (res.error) {
-      toast.error(`Gagal memuat data pengguna: ${res.error}`)
-    } else if (res.data) {
-      setUsers(res.data)
-    }
-    setTableLoading(false)
-  }, [])
+  // ---------- DATA ----------
+  const {
+    data: users = [],
+    isLoading: tableLoading,
+    error: usersError,
+  } = useQuery<UserAccount[]>({
+    queryKey: USERS_KEY,
+    queryFn: () => fetchJson<UserAccount[]>("/api/users"),
+  })
 
   React.useEffect(() => {
-    fetchUsersData()
-  }, [fetchUsersData])
+    if (usersError) {
+      toast.error(`Gagal memuat data pengguna: ${getErrorMessage(usersError)}`)
+    }
+  }, [usersError])
 
+  const saveUserMutation = useMutation({
+    mutationFn: (input: { id?: string; body: Record<string, unknown> }) =>
+      fetchJson(input.id ? `/api/users/${input.id}` : "/api/users", {
+        method: input.id ? "PUT" : "POST",
+        body: input.body,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: USERS_KEY }),
+  })
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: (input: { id: string; newPassword: string }) =>
+      fetchJson(`/api/users/${input.id}/reset-password`, {
+        method: "POST",
+        body: { newPassword: input.newPassword },
+      }),
+  })
+
+  // ---------- HANDLERS ----------
   const handleOpenAddUser = () => {
     setEditingUser(null)
     setErrorMsg(null)
@@ -76,67 +96,36 @@ export default function PengaturanPenggunaPage() {
     setOpenUserModal(true)
   }
 
+  const handleSaveUser = () => {
+    if (!formUser.nama || !formUser.email) return
+    setErrorMsg(null)
 
-  const handleSaveUser = async () => {
-  if (!formUser.nama || !formUser.email) return
-  setLoading(true)
-  setErrorMsg(null)
+    // password hanya dikirim saat tambah pengguna baru
+    const { password, ...profile } = formUser
+    const isEdit = Boolean(editingUser)
 
-  if (editingUser) {
-    // UPDATE DATA SUPABASE
-    const res = await updateUser(editingUser.id, {
-      nama: formUser.nama,
-      email: formUser.email,
-      nipNisn: formUser.nipNisn,
-      role: formUser.role,
-      status: formUser.status,
-    })
-
-    if (res?.error) {
-      setErrorMsg(res.error)
-      toast.error(`Gagal memperbarui pengguna: ${res.error}`)
-    } else {
-      await fetchUsersData()
-      toast.success("Data pengguna berhasil diperbarui!")
-      setOpenUserModal(false)
-    }
-  } else {
-    // TAMBAH USER BARU SUPABASE
-    const res = await createNewUser({
-      nama: formUser.nama,
-      email: formUser.email,
-      nipNisn: formUser.nipNisn,
-      role: formUser.role,
-      status: formUser.status,
-      password: formUser.password,
-    })
-
-    if (res?.error) {
-      setErrorMsg(res.error)
-      toast.error(`Gagal membuat pengguna: ${res.error}`)
-    } else {
-      await fetchUsersData()
-      toast.success(`Pengguna ${formUser.nama} berhasil ditambahkan!`)
-      setOpenUserModal(false)
-    }
+    saveUserMutation.mutate(
+      {
+        id: editingUser?.id,
+        body: isEdit ? profile : { ...profile, password },
+      },
+      {
+        onSuccess: () => {
+          toast.success(
+            isEdit
+              ? "Data pengguna berhasil diperbarui!"
+              : `Pengguna ${formUser.nama} berhasil ditambahkan!`
+          )
+          setOpenUserModal(false)
+        },
+        onError: (err) => {
+          const message = getErrorMessage(err)
+          setErrorMsg(message)
+          toast.error(`${isEdit ? "Gagal memperbarui" : "Gagal membuat"} pengguna: ${message}`)
+        },
+      }
+    )
   }
-  setLoading(false)
-}
-
-const handleSaveResetPassword = async () => {
-  if (!newPassword || !targetResetUser) return
-  setLoading(true)
-
-  const res = await resetUserPassword(targetResetUser.id, newPassword)
-
-  if (res?.error) {
-    toast.error(`Gagal mereset password: ${res.error}`)
-  } else {
-    toast.success(`Password untuk ${targetResetUser.nama} berhasil diperbarui!`)
-    setOpenResetPasswordModal(false)
-  }
-  setLoading(false)
-}
 
   const handleOpenResetPassword = (user: UserAccount) => {
     setTargetResetUser(user)
@@ -144,6 +133,24 @@ const handleSaveResetPassword = async () => {
     setOpenResetPasswordModal(true)
   }
 
+  const handleSaveResetPassword = () => {
+    if (!newPassword || !targetResetUser) return
+
+    resetPasswordMutation.mutate(
+      { id: targetResetUser.id, newPassword },
+      {
+        onSuccess: () => {
+          toast.success(`Password untuk ${targetResetUser.nama} berhasil diperbarui!`)
+          setOpenResetPasswordModal(false)
+        },
+        onError: (err) => {
+          toast.error(`Gagal mereset password: ${getErrorMessage(err)}`)
+        },
+      }
+    )
+  }
+
+  // ---------- FILTER & PAGINATION ----------
   const filteredUsers = React.useMemo(() => {
     return users.filter((u) => {
       const matchesSearch = u.nama.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()) || u.nipNisn.toLowerCase().includes(search.toLowerCase())
@@ -165,7 +172,6 @@ const handleSaveResetPassword = async () => {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">Pengaturan Akun Pengguna</h1>
@@ -174,7 +180,6 @@ const handleSaveResetPassword = async () => {
         <Button onClick={handleOpenAddUser}><Plus className="mr-2 h-4 w-4" /> Tambah Pengguna Baru</Button>
       </div>
 
-      {/* Filter Toolbar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <div className="relative max-w-xs w-full">
@@ -195,14 +200,13 @@ const handleSaveResetPassword = async () => {
         <span className="text-xs text-muted-foreground">Total: {filteredUsers.length} Pengguna</span>
       </div>
 
-      {/* Main Table */}
       <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Nama Lengkap</TableHead>
-              <TableHead>Email / Username</TableHead>
-              <TableHead>NIP / NISN</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>NIP/NISN</TableHead>
               <TableHead className="w-[120px]">Role</TableHead>
               <TableHead className="w-[100px]">Status</TableHead>
               <TableHead className="w-[140px]">Login Terakhir</TableHead>
@@ -212,23 +216,23 @@ const handleSaveResetPassword = async () => {
           <TableBody>
             {tableLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
+                <TableCell colSpan={7} className="h-24 text-center">
                   <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Memuat data pengguna...
+                    <Loader2 className="h-4 w-4 animate-spin" /> Memuat data...
                   </div>
                 </TableCell>
               </TableRow>
             ) : paginatedUsers.length ? (
-              paginatedUsers.map((user, idx) => (
+              paginatedUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-semibold text-foreground">{user.nama}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5 text-sm font-mono">
+                    <div className="flex items-center gap-1.5 text-sm">
                       <Mail className="h-3 w-3 text-primary" />
                       <span>{user.email}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{user.nipNisn}</TableCell>
+                  <TableCell className="text-sm">{user.nipNisn}</TableCell>
                   <TableCell>{getRoleBadge(user.role)}</TableCell>
                   <TableCell>
                     {user.status === "Aktif" ? (
@@ -256,13 +260,12 @@ const handleSaveResetPassword = async () => {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">Data akun pengguna tidak ditemukan.</TableCell>
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">Data akun pengguna tidak ditemukan.</TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
 
-        {/* Pagination Footer */}
         <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>Baris per halaman</span>
@@ -283,7 +286,6 @@ const handleSaveResetPassword = async () => {
         </div>
       </div>
 
-      {/* DIALOG FORM TAMBAH / EDIT PENGGUNA */}
       <Dialog open={openUserModal} onOpenChange={setOpenUserModal}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
@@ -347,9 +349,9 @@ const handleSaveResetPassword = async () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenUserModal(false)} disabled={loading}>Batal</Button>
-            <Button onClick={handleSaveUser} disabled={loading}>
-              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</> : "Simpan Pengguna"}
+            <Button variant="outline" onClick={() => setOpenUserModal(false)} disabled={saveUserMutation.isPending}>Batal</Button>
+            <Button onClick={handleSaveUser} disabled={saveUserMutation.isPending}>
+              {saveUserMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</> : "Simpan Pengguna"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -371,8 +373,10 @@ const handleSaveResetPassword = async () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenResetPasswordModal(false)}>Batal</Button>
-            <Button onClick={handleSaveResetPassword}>Perbarui Password</Button>
+            <Button variant="outline" onClick={() => setOpenResetPasswordModal(false)} disabled={resetPasswordMutation.isPending}>Batal</Button>
+            <Button onClick={handleSaveResetPassword} disabled={resetPasswordMutation.isPending}>
+              {resetPasswordMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</> : "Perbarui Password"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

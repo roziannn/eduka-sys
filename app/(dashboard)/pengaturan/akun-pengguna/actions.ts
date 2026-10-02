@@ -1,38 +1,59 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/utils/supabase/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import bcrypt from 'bcryptjs'
+import { getCurrentUser } from '@/lib/current-user'
+import { userRepository, type UserRecord } from '@/repositories/user.repository'
+import { roleRepository } from '@/repositories/role.repository'
 
-// Inisialisasi Supabase Admin Client khusus menggunakan Service Role Key
-function createAdminClient() {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  )
+type UiRole = 'ADMINISTRATOR' | 'GURU' | 'SISWA'
+type UiStatus = 'Aktif' | 'Nonaktif'
+
+const USERS_PATH = '/pengaturan/akun-pengguna'
+const DEFAULT_PASSWORD = 'eduka123'
+
+const ROLE_TO_DB: Record<string, string> = {
+  ADMINISTRATOR: 'ADMIN',
+  GURU: 'TEACHER',
+  SISWA: 'STUDENT',
+  ADMIN: 'ADMIN',
+  TEACHER: 'TEACHER',
+  STUDENT: 'STUDENT',
 }
 
-export async function getUsers() {
-  const supabaseAdmin = createAdminClient()
-  const { data, error } = await supabaseAdmin.auth.admin.listUsers()
+// database -> UI
+const ROLE_TO_UI: Record<string, UiRole> = {
+  ADMIN: 'ADMINISTRATOR',
+  TEACHER: 'GURU',
+  STUDENT: 'SISWA',
+}
 
-  if (error) return { error: error.message }
+async function requireAdmin() {
+  const user = await getCurrentUser()
+  return user && user.role === 'ADMIN' ? user : null
+}
 
-  const formattedUsers = data.users.map((u) => ({
+function toErrorMessage(err: unknown): string {
+  const e = err as { code?: string; constraint?: string }
+  if (e?.code === '23505') {
+    if (e.constraint?.includes('email')) return 'Email sudah terdaftar'
+    if (e.constraint?.includes('username')) return 'Username sudah dipakai'
+    return 'Data sudah ada'
+  }
+  console.error(err)
+  return 'Terjadi kesalahan pada server'
+}
+
+function formatUser(u: UserRecord) {
+  return {
     id: u.id,
-    nama: u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
-    email: u.email || '',
-    nipNisn: u.user_metadata?.nip_nisn || '-',
-    role: (u.user_metadata?.role as 'ADMINISTRATOR' | 'GURU' | 'SISWA') || 'GURU',
-    status: (u.user_metadata?.status as 'Aktif' | 'Nonaktif') || 'Aktif',
-    lastLogin: u.last_sign_in_at
-      ? new Date(u.last_sign_in_at).toLocaleDateString('id-ID', {
+    nama: u.full_name || u.username || u.email.split('@')[0],
+    email: u.email,
+    nipNisn: u.nip_nisn || '-',
+    role: ROLE_TO_UI[u.role_normalized] ?? ('GURU' as UiRole),
+    status: (u.is_active ? 'Aktif' : 'Nonaktif') as UiStatus,
+    lastLogin: u.last_login_at
+      ? new Date(u.last_login_at).toLocaleDateString('id-ID', {
           day: '2-digit',
           month: 'short',
           year: 'numeric',
@@ -40,9 +61,23 @@ export async function getUsers() {
           minute: '2-digit',
         })
       : 'Belum pernah',
-  }))
+  }
+}
 
-  return { data: formattedUsers }
+function cleanNipNisn(value: string | undefined): string | null {
+  const v = (value ?? '').trim()
+  return v === '' || v === '-' ? null : v
+}
+
+export async function getUsers() {
+  if (!(await requireAdmin())) return { error: 'Anda tidak memiliki akses' }
+
+  try {
+    const users = await userRepository.findAll()
+    return { data: users.map(formatUser) }
+  } catch (err) {
+    return { error: toErrorMessage(err) }
+  }
 }
 
 export async function createNewUser(payload: {
@@ -53,74 +88,92 @@ export async function createNewUser(payload: {
   status: string
   password?: string
 }) {
-  const supabaseAdmin = createAdminClient()
+  if (!(await requireAdmin())) return { error: 'Anda tidak memiliki akses' }
 
-  // Pakai Admin API (tidak terkena rate limit email & melewati proteksi anon)
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({
-    email: payload.email,
-    password: payload.password || 'eduka123',
-    email_confirm: true,
-    user_metadata: {
-      full_name: payload.nama,
-      nip_nisn: payload.nipNisn,
-      role: payload.role,
-      status: payload.status,
-    },
-  })
+  const email = payload.email.trim()
+  const nama = payload.nama.trim()
+  if (!email || !nama) return { error: 'Nama dan email wajib diisi' }
 
-  if (error) return { error: error.message }
+  const roleNormalized = ROLE_TO_DB[payload.role]
+  if (!roleNormalized) return { error: 'Role tidak valid' }
 
-  revalidatePath('/dashboard/pengaturan/akun-pengguna')
-  return { success: true, data }
-}
+  try {
+    const roleId = await roleRepository.findIdByNormalizedName(roleNormalized)
+    if (!roleId) return { error: 'Role tidak ditemukan di database' }
 
-export async function fetchUsersFromSupabase() {
-  const supabase = await createClient()
-  
-  const { data: { users }, error } = await supabase.auth.admin.listUsers()
+    const passwordHash = await bcrypt.hash(payload.password || DEFAULT_PASSWORD, 10)
 
-  if (error) {
-    const { data: { user } } = await supabase.auth.getUser()
-    return user ? [user] : []
+    const id = await userRepository.create({
+      roleId,
+      username: email.split('@')[0],
+      email,
+      fullName: nama,
+      nipNisn: cleanNipNisn(payload.nipNisn),
+      passwordHash,
+      isActive: payload.status !== 'Nonaktif',
+    })
+
+    revalidatePath(USERS_PATH)
+    return { success: true, data: { id } }
+  } catch (err) {
+    return { error: toErrorMessage(err) }
   }
-
-  return users
 }
 
-export async function updateUser(userId: string, payload: {
-  nama: string
-  email: string
-  nipNisn: string
-  role: string
-  status: string
-}) {
-  const supabaseAdmin = createAdminClient()
+export async function updateUser(
+  userId: string,
+  payload: {
+    nama: string
+    email: string
+    nipNisn: string
+    role: string
+    status: string
+  }
+) {
+  if (!(await requireAdmin())) return { error: 'Anda tidak memiliki akses' }
 
-  const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-    email: payload.email,
-    user_metadata: {
-      full_name: payload.nama,
-      nip_nisn: payload.nipNisn,
-      role: payload.role,
-      status: payload.status,
-    },
-  })
+  const email = payload.email.trim()
+  const nama = payload.nama.trim()
+  if (!email || !nama) return { error: 'Nama dan email wajib diisi' }
 
-  if (error) return { error: error.message }
+  const roleNormalized = ROLE_TO_DB[payload.role]
+  if (!roleNormalized) return { error: 'Role tidak valid' }
 
-  revalidatePath('/dashboard/pengaturan/akun-pengguna')
-  return { success: true, data }
+  try {
+    const roleId = await roleRepository.findIdByNormalizedName(roleNormalized)
+    if (!roleId) return { error: 'Role tidak ditemukan di database' }
+
+    const updated = await userRepository.update(userId, {
+      roleId,
+      email,
+      fullName: nama,
+      nipNisn: cleanNipNisn(payload.nipNisn),
+      isActive: payload.status !== 'Nonaktif',
+    })
+    if (!updated) return { error: 'Pengguna tidak ditemukan' }
+
+    revalidatePath(USERS_PATH)
+    return { success: true }
+  } catch (err) {
+    return { error: toErrorMessage(err) }
+  }
 }
 
 export async function resetUserPassword(userId: string, newPassword: string) {
-  const supabaseAdmin = createAdminClient()
+  if (!(await requireAdmin())) return { error: 'Anda tidak memiliki akses' }
 
-  const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-    password: newPassword,
-  })
+  if (!newPassword || newPassword.length < 6) {
+    return { error: 'Password minimal 6 karakter' }
+  }
 
-  if (error) return { error: error.message }
+  try {
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    const updated = await userRepository.updatePassword(userId, passwordHash)
+    if (!updated) return { error: 'Pengguna tidak ditemukan' }
 
-  revalidatePath('/dashboard/pengaturan/akun-pengguna')
-  return { success: true, data }
+    revalidatePath(USERS_PATH)
+    return { success: true }
+  } catch (err) {
+    return { error: toErrorMessage(err) }
+  }
 }

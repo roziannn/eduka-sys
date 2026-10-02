@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { createClient } from "@/utils/supabase/client"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
@@ -21,6 +20,12 @@ import {
   Settings2,
   Leaf,
 } from "lucide-react"
+
+type SidebarUser = {
+  name: string
+  email: string
+  avatar: string
+}
 
 const data = {
   navMain: [
@@ -93,7 +98,7 @@ const data = {
           title: "Hak Akses",
           url: "/pengaturan/hak-akses",
         },
-         {
+        {
           title: "Menu Aplikasi",
           url: "/pengaturan/menu-aplikasi",
         },
@@ -103,27 +108,11 @@ const data = {
   navSecondary: [],
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [user, setUser] = React.useState({
-    name: "Admin Eduka",
-    email: "admin@eduka.id",
-    avatar: "/avatars/admin.jpg",
-  })
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  user: SidebarUser
+}
 
-  // Ambil data user dari Supabase Client Session
-  React.useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user: supabaseUser } }) => {
-      if (supabaseUser) {
-        setUser({
-          name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split("@")[0] || "User",
-          email: supabaseUser.email || "",
-          avatar: supabaseUser.user_metadata?.avatar_url || "/avatars/admin.jpg",
-        })
-      }
-    })
-  }, [])
-
+export function AppSidebar({ user, ...props }: AppSidebarProps) {
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>

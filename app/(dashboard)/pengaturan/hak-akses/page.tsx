@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Plus, Settings, Search, CheckCircle2, XCircle, Loader2, Edit } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -20,7 +20,16 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getRoles, createRole, updateRole, RoleData } from "./actions"
+import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
+
+export interface RoleData {
+  id: string
+  code: string
+  name: string
+  description: string
+  total_user: number
+  status: "Aktif" | "Nonaktif"
+}
 
 export interface RoleUI {
   id: string
@@ -31,50 +40,63 @@ export interface RoleUI {
   status: "Aktif" | "Nonaktif"
 }
 
+const ROLES_KEY = ["roles"]
+
+const ADMIN_ROLE_CODE = "ADMIN"
+
 export default function HakAksesPage() {
-  const [roles, setRoles] = React.useState<RoleUI[]>([])
-  const [tableLoading, setTableLoading] = React.useState(true)
-  const [formLoading, setFormLoading] = React.useState(false)
+  const queryClient = useQueryClient()
+
   const [search, setSearch] = React.useState("")
-  
   const [openModal, setOpenModal] = React.useState(false)
   const [editingRole, setEditingRole] = React.useState<RoleUI | null>(null)
 
-  // Form State
   const [formRole, setFormRole] = React.useState({
     namaRole: "",
     deskripsi: "",
     status: "Aktif" as "Aktif" | "Nonaktif",
   })
 
-  // Cek apakah role yang sedang diedit adalah Administrator
-  const isAdminRole = editingRole?.code === "ADMINISTRATOR"
+  const isAdminRole = editingRole?.code === ADMIN_ROLE_CODE
 
-  // --- FETCH DATA ROLE DARI SUPABASE ---
-  const fetchRolesData = React.useCallback(async () => {
-    setTableLoading(true)
-    const res = await getRoles()
-    if (res.error) {
-      toast.error(`Gagal memuat data role: ${res.error}`)
-    } else if (res.data) {
-      const formatted = res.data.map((r: RoleData) => ({
+  const {
+    data: rawRoles = [],
+    isLoading: tableLoading,
+    error: rolesError,
+  } = useQuery<RoleData[]>({
+    queryKey: ROLES_KEY,
+    queryFn: () => fetchJson<RoleData[]>("/api/roles"),
+  })
+
+  React.useEffect(() => {
+    if (rolesError) {
+      toast.error(`Gagal memuat data role: ${getErrorMessage(rolesError)}`)
+    }
+  }, [rolesError])
+
+  const roles: RoleUI[] = React.useMemo(
+    () =>
+      rawRoles.map((r) => ({
         id: r.id,
         code: r.code,
         namaRole: r.name,
-        deskripsi: r.description || "-",
-        jumlahPengguna: r.total_user || 0,
+        deskripsi: r.description,
+        jumlahPengguna: r.total_user,
         status: r.status,
-      }))
-      setRoles(formatted)
-    }
-    setTableLoading(false)
-  }, [])
+      })),
+    [rawRoles]
+  )
 
-  React.useEffect(() => {
-    fetchRolesData()
-  }, [fetchRolesData])
+  const saveRoleMutation = useMutation({
+    mutationFn: (input: { id?: string; body: Record<string, unknown> }) =>
+      fetchJson(input.id ? `/api/roles/${input.id}` : "/api/roles", {
+        method: input.id ? "PUT" : "POST",
+        body: input.body,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROLES_KEY }),
+  })
 
-  // --- HANDLER MODAL ---
+  // ---------- HANDLERS ----------
   const handleOpenAdd = () => {
     setEditingRole(null)
     setFormRole({ namaRole: "", deskripsi: "", status: "Aktif" })
@@ -87,65 +109,50 @@ export default function HakAksesPage() {
     setOpenModal(true)
   }
 
-  // --- HANDLER SAVE (CREATE / UPDATE) ---
-  const handleSaveRole = async () => {
-    if (!formRole.namaRole) {
+  const handleSaveRole = () => {
+    if (!formRole.namaRole.trim()) {
       toast.error("Nama Role wajib diisi!")
       return
     }
 
-    // Protection Check: Pastikan Administrator tidak bisa di-nonaktifkan
-    const targetStatus = isAdminRole ? "Aktif" : formRole.status
+    const isEdit = Boolean(editingRole)
 
-    setFormLoading(true)
-
-    if (editingRole) {
-      // PROSES EDIT / UPDATE
-      const res = await updateRole(editingRole.id, {
-        namaRole: formRole.namaRole,
-        deskripsi: formRole.deskripsi,
-        status: targetStatus,
-      })
-
-      if (res.error) {
-        toast.error(`Gagal memperbarui role: ${res.error}`)
-      } else {
-        toast.success(`Role "${formRole.namaRole}" berhasil diperbarui!`)
-        await fetchRolesData()
-        setOpenModal(false)
+    saveRoleMutation.mutate(
+      {
+        id: editingRole?.id,
+        body: {
+          ...formRole,
+          status: isAdminRole ? "Aktif" : formRole.status,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(
+            `Role "${formRole.namaRole}" berhasil ${isEdit ? "diperbarui" : "ditambahkan"}!`
+          )
+          setOpenModal(false)
+        },
+        onError: (err) => {
+          toast.error(
+            `${isEdit ? "Gagal memperbarui" : "Gagal menambah"} role: ${getErrorMessage(err)}`
+          )
+        },
       }
-    } else {
-      // PROSES TAMBAH BARU
-      const res = await createRole({
-        namaRole: formRole.namaRole,
-        deskripsi: formRole.deskripsi,
-        status: formRole.status,
-      })
-
-      if (res.error) {
-        toast.error(`Gagal menambah role: ${res.error}`)
-      } else {
-        toast.success(`Role "${formRole.namaRole}" berhasil ditambahkan!`)
-        await fetchRolesData()
-        setOpenModal(false)
-      }
-    }
-
-    setFormLoading(false)
+    )
   }
 
   const filteredRoles = React.useMemo(() => {
+    const keyword = search.toLowerCase()
     return roles.filter(
       (r) =>
-        r.namaRole.toLowerCase().includes(search.toLowerCase()) ||
-        r.deskripsi.toLowerCase().includes(search.toLowerCase()) ||
-        r.code.toLowerCase().includes(search.toLowerCase())
+        r.namaRole.toLowerCase().includes(keyword) ||
+        r.deskripsi.toLowerCase().includes(keyword) ||
+        r.code.toLowerCase().includes(keyword)
     )
   }, [roles, search])
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -155,13 +162,11 @@ export default function HakAksesPage() {
             Kelola peran pengguna dan atribusi izin akses menu serta tombol tindakan.
           </p>
         </div>
-
         <Button onClick={handleOpenAdd}>
           <Plus className="mr-2 h-4 w-4" /> Tambah Role Baru
         </Button>
       </div>
 
-      {/* Toolbar */}
       <div className="flex items-center justify-between gap-3">
         <div className="relative max-w-xs w-full">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -193,7 +198,7 @@ export default function HakAksesPage() {
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center">
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Memuat data role dari Supabase...
+                    <Loader2 className="h-4 w-4 animate-spin" /> Memuat data...
                   </div>
                 </TableCell>
               </TableRow>
@@ -202,16 +207,10 @@ export default function HakAksesPage() {
                 <TableRow key={role.id}>
                   <TableCell className="font-mono text-xs">{idx + 1}</TableCell>
                   <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-foreground">{role.namaRole}</span>
-                    </div>
+                    <span className="font-semibold text-foreground">{role.namaRole}</span>
                   </TableCell>
-                  <TableCell className="text-sm">{role.deskripsi}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <span>{role.jumlahPengguna} User</span>
-                    </div>
-                  </TableCell>
+                  <TableCell className="text-sm">{role.deskripsi || "-"}</TableCell>
+                  <TableCell className="text-sm">{role.jumlahPengguna} User</TableCell>
                   <TableCell>
                     {role.status === "Aktif" ? (
                       <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 hover:bg-emerald-500/20 text-[10px] gap-1 shadow-none">
@@ -234,7 +233,7 @@ export default function HakAksesPage() {
                       >
                         <Edit className="h-4 w-4 text-muted-foreground" />
                       </Button>
-                      
+
                       <Link href={`/pengaturan/hak-akses/${role.id}`}>
                         <Button
                           size="icon"
@@ -260,7 +259,6 @@ export default function HakAksesPage() {
         </Table>
       </div>
 
-      {/* DIALOG TAMBAH / EDIT ROLE */}
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
@@ -325,11 +323,11 @@ export default function HakAksesPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)} disabled={formLoading}>
+            <Button variant="outline" onClick={() => setOpenModal(false)} disabled={saveRoleMutation.isPending}>
               Batal
             </Button>
-            <Button onClick={handleSaveRole} disabled={formLoading}>
-              {formLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</> : "Simpan Role"}
+            <Button onClick={handleSaveRole} disabled={saveRoleMutation.isPending}>
+              {saveRoleMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</> : "Simpan Role"}
             </Button>
           </DialogFooter>
         </DialogContent>

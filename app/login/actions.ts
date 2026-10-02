@@ -2,37 +2,78 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/utils/supabase/server'
+import bcrypt from 'bcryptjs'
+import { queryOne, query } from '@/lib/db'
+import { createSession, destroySession } from '@/lib/auth'
+
+type UserRow = {
+  id: string
+  email: string
+  password_hash: string
+  is_active: boolean
+  role_name: string
+  role_normalized: string
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: 'Admin',
+  TEACHER: 'Guru',
+  STUDENT: 'Siswa',
+}
 
 export async function login(formData: FormData) {
-  const supabase = await createClient()
+  const email = String(formData.get('email') ?? '').trim()
+  const password = String(formData.get('password') ?? '')
+  const selectedRole = String(formData.get('role') ?? '').trim().toUpperCase()
 
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
-  const selectedRole = formData.get('role') as string
+  if (!email || !password) {
+    return { error: 'Email dan password wajib diisi' }
+  }
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
+  const user = await queryOne<UserRow>(
+    `SELECT u.id, u.email, u.password_hash, u.is_active,
+            r.name AS role_name, r.normalized_name AS role_normalized
+     FROM "CORE_User" u
+     JOIN "CORE_Role" r ON r.id = u.role_id
+     WHERE LOWER(u.email) = LOWER($1)`,
+    [email]
+  )
+
+  if (!user) {
+    return { error: 'Email atau password salah' }
+  }
+
+  const passwordValid = await bcrypt.compare(password, user.password_hash)
+  if (!passwordValid) {
+    return { error: 'Email atau password salah' }
+  }
+
+  if (!user.is_active) {
+    return { error: 'Akun tidak aktif, hubungi administrator' }
+  }
+
+  if (selectedRole && user.role_normalized !== selectedRole) {
+    const label = ROLE_LABEL[selectedRole] ?? selectedRole
+    return { error: `Akun ini tidak terdaftar sebagai ${label}` }
+  }
+
+  await query(
+    `UPDATE "CORE_User" SET last_login_at = NOW() WHERE id = $1`,
+    [user.id]
+  )
+
+  await createSession({
+    userId: user.id,
+    email: user.email,
+    role: user.role_normalized,
   })
-
-  if (error) {
-    return { error: "Email atau password salah" }
-  }
-
-  const userRole = data.user?.user_metadata?.role
-  if (userRole && userRole !== selectedRole) {
-    await supabase.auth.signOut()
-    return { error: `Akun ini tidak terdaftar sebagai ${selectedRole}` }
-  }
 
   revalidatePath('/', 'layout')
   redirect('/dashboard')
 }
 
 export async function logout() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  await destroySession()
 
   revalidatePath('/', 'layout')
   redirect('/login')
