@@ -19,6 +19,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   kode: "Kode mata pelajaran sudah dipakai",
   kelas: "Nama kelas sudah dipakai",
   templaterapor: "Nama template sudah dipakai",
+  soalujian: "Nama ujian sudah dipakai pada tahun ajaran tersebut",
 }
 
 export async function requireAdmin() {
@@ -63,6 +64,16 @@ export function handleError(err: unknown) {
     )
     return NextResponse.json(
       { error: key ? UNIQUE_MESSAGES[key] : "Data sudah ada" },
+      { status: 409 }
+    )
+  }
+
+  if (e?.code === "23503") {
+    return NextResponse.json(
+      {
+        error:
+          "Data berkaitan dengan data lain (mapel, kelas, atau tahun ajaran) yang tidak ditemukan atau masih dipakai",
+      },
       { status: 409 }
     )
   }

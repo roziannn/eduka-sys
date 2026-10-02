@@ -1,12 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { driver } from "driver.js"
 import "driver.js/dist/driver.css"
 import { z } from "zod"
 import { toast } from "sonner"
-import { ArrowLeft, Save, Plus, Trash2, HelpCircle, CheckCircle2, Eye } from "lucide-react"
+import { ArrowLeft, Save, Plus, Trash2, HelpCircle, CheckCircle2, Eye, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,9 +20,17 @@ import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import RichTextEditor from "@/components/rich-text-editor"
+import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
+import {
+  JENIS_UJIAN,
+  type ReferensiUjian,
+  type SoalDb,
+  type StatusUjian,
+  type UjianDetail,
+} from "@/types/soal-ujian"
 
 // --- TYPES & CONSTANTS ---
-// Opsi menggunakan ID numerik (1, 2, 3, 4) sesuai desain database mst_soal_ujian
+// Opsi menggunakan ID numerik (1, 2, 3, 4) di sisi UI. Di database disimpan sebagai string.
 interface OpsiJawaban {
   id: number
   label: string
@@ -28,20 +38,80 @@ interface OpsiJawaban {
   isBenar: boolean
 }
 
+type TipeUI = "Pilihan Ganda" | "Essai"
+
 interface SoalItem {
   id: string
   pertanyaan: string
-  tipe: "Pilihan Ganda" | "Essai"
+  tipe: TipeUI
   isMultipleChoice?: boolean
   bobot: number
   opsi: OpsiJawaban[]
 }
 
-const LIST_MAPEL = ["Matematika", "Bahasa Indonesia", "Bahasa Inggris", "Fisika", "Kimia", "Biologi"]
-const LIST_JENIS = ["UH", "UTS", "UAS", "US"]
-const LIST_KELAS = ["X IPA", "X IPS", "XI IPA", "XI IPS", "XII IPA", "XII IPS"]
+const LIST_PATH = "/dashboard/soal-ujian"
+const UJIAN_KEY = ["soal-ujian"]
 
 const stripHtml = (html: string) => html?.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim() || ""
+
+const createSoal = (tipe: TipeUI, id: string): SoalItem => ({
+  id,
+  pertanyaan: "",
+  tipe,
+  isMultipleChoice: false,
+  bobot: 10,
+  opsi:
+    tipe === "Pilihan Ganda"
+      ? Array.from({ length: 4 }, (_, i) => ({
+          id: i + 1,
+          label: String.fromCharCode(65 + i),
+          teks: "",
+          isBenar: i === 0,
+        }))
+      : [],
+})
+
+// UI -> bentuk JSON di database. Nomor urut (seq) diisi server berdasarkan urutan array.
+const soalToPayload = (list: SoalItem[]) =>
+  list.map((s) =>
+    s.tipe === "Pilihan Ganda"
+      ? {
+          id: s.id,
+          tipe: "PG",
+          pertanyaan: s.pertanyaan,
+          bobot: Number(s.bobot) || 0,
+          multiJawaban: !!s.isMultipleChoice,
+          opsi: s.opsi.map((o) => ({ id: String(o.id), teks: o.teks, benar: o.isBenar })),
+        }
+      : {
+          id: s.id,
+          tipe: "ESSAI",
+          pertanyaan: s.pertanyaan,
+          bobot: Number(s.bobot) || 0,
+        }
+  )
+
+// JSON database -> UI
+const soalFromDb = (list: SoalDb[]): SoalItem[] =>
+  [...list]
+    .sort((a, b) => a.seq - b.seq)
+    .map(
+      (s): SoalItem => ({
+        id: s.id,
+        pertanyaan: s.pertanyaan,
+        tipe: s.tipe === "PG" ? "Pilihan Ganda" : "Essai",
+        isMultipleChoice: !!s.multiJawaban,
+        bobot: s.bobot,
+        opsi: [...(s.opsi ?? [])]
+          .sort((a, b) => a.seq - b.seq)
+          .map((o, i) => ({
+            id: Number(o.id) || i + 1,
+            label: String.fromCharCode(65 + i),
+            teks: o.teks,
+            isBenar: o.benar,
+          })),
+      })
+    )
 
 // --- ZOD VALIDATION SCHEMAS ---
 const opsiSchema = z.object({
@@ -85,11 +155,11 @@ const soalSchema = z.object({
 
 const ujianSchema = z.object({
   namaUjian: z.string().trim().min(1, { message: "Nama Ujian wajib diisi." }),
-  mataPelajaran: z.string().min(1, { message: "Mata Pelajaran wajib dipilih." }),
+  mapelId: z.string().min(1, { message: "Mata Pelajaran wajib dipilih." }),
   jenisUjian: z.string().min(1, { message: "Jenis Ujian wajib dipilih." }),
-  targetKelas: z.array(z.string()).min(1, { message: "Pilih minimal 1 Distribusi Kelas." }),
-  tahunAjaran: z.string().trim().min(1, { message: "Tahun Ajaran wajib diisi." }),
-  semester: z.string().trim().min(1, { message: "Semester wajib diisi." }),
+  kelasIds: z.array(z.string()).min(1, { message: "Pilih minimal 1 Distribusi Kelas." }),
+  tahunAjaran: z.string().trim().min(1, { message: "Tahun Ajaran wajib dipilih." }),
+  semester: z.string().trim().min(1, { message: "Semester wajib dipilih." }),
   durasiMenit: z.number().min(1, { message: "Durasi ujian minimal 1 menit." }),
   kkm: z.number().min(0, { message: "KKM minimal 0." }).max(100, { message: "KKM maksimal 100." }),
   acakSoal: z.boolean(),
@@ -105,16 +175,37 @@ const TOUR_STEPS = [
   { element: "#tour-action-buttons", popover: { title: "Aksi Ujian", description: "Preview, simpan draft, atau terbitkan.", side: "bottom", align: "end" } },
 ]
 
+// Suspense wajib karena UjianForm memakai useSearchParams
 export default function CreateUjianPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Memuat...
+        </div>
+      }
+    >
+      <UjianForm />
+    </React.Suspense>
+  )
+}
+
+function UjianForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
+
+  // Ada ?id=... berarti mode edit, tanpa id berarti ujian baru
+  const ujianId = searchParams.get("id")
+  const isEdit = ujianId !== null
 
   const [infoUjian, setInfoUjian] = React.useState({
     namaUjian: "",
-    mataPelajaran: LIST_MAPEL[0],
-    jenisUjian: "UTS",
-    targetKelas: ["X IPA"],
-    tahunAjaran: "2025/2026",
-    semester: "Genap",
+    mapelId: "",
+    jenisUjian: "UTS" as string,
+    kelasIds: [] as string[],
+    tahunAjaran: "",
+    semester: "",
     durasiMenit: 90,
     kkm: 75,
     acakSoal: true,
@@ -122,23 +213,96 @@ export default function CreateUjianPage() {
   })
 
   const [openItems, setOpenItems] = React.useState<string[]>(["s-1"])
-  const [soalList, setSoalList] = React.useState<SoalItem[]>([
-    {
-      id: "s-1",
-      pertanyaan: "",
-      tipe: "Pilihan Ganda",
-      isMultipleChoice: false,
-      bobot: 10,
-      opsi: Array.from({ length: 4 }, (_, i) => ({
-        id: i + 1,
-        label: String.fromCharCode(65 + i),
-        teks: "",
-        isBenar: i === 0,
-      })),
-    },
-  ])
-
+  const [soalList, setSoalList] = React.useState<SoalItem[]>([createSoal("Pilihan Ganda", "s-1")])
   const [errors, setErrors] = React.useState<Record<string, string>>({})
+
+  // Mode edit: sudah terisi dari server. Mode baru: default periode dan mapel sudah diterapkan.
+  const [hydrated, setHydrated] = React.useState(false)
+  const defaultsApplied = React.useRef(false)
+
+  // ---------- DATA ----------
+  const { data: referensi, error: referensiError } = useQuery<ReferensiUjian>({
+    queryKey: [...UJIAN_KEY, "referensi"],
+    queryFn: () => fetchJson<ReferensiUjian>("/api/soal-ujian/referensi"),
+  })
+
+  const {
+    data: detail,
+    isLoading: detailLoading,
+    error: detailError,
+  } = useQuery<UjianDetail>({
+    queryKey: [...UJIAN_KEY, ujianId],
+    queryFn: () => fetchJson<UjianDetail>(`/api/soal-ujian/${ujianId}`),
+    enabled: isEdit,
+    staleTime: Infinity,
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      fetchJson<{ id: string }>(isEdit ? `/api/soal-ujian/${ujianId}` : "/api/soal-ujian", {
+        method: isEdit ? "PUT" : "POST",
+        body,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: UJIAN_KEY }),
+  })
+
+  React.useEffect(() => {
+    if (referensiError) {
+      toast.error(`Gagal memuat data referensi: ${getErrorMessage(referensiError)}`)
+    }
+  }, [referensiError])
+
+  // Ujian baru: isi default mapel pertama dan periode yang sedang aktif
+  React.useEffect(() => {
+    if (!referensi || isEdit || defaultsApplied.current) return
+    defaultsApplied.current = true
+
+    const periode = referensi.tahunAjaran.find((t) => t.isAktif) ?? referensi.tahunAjaran[0]
+    const mapel = referensi.mapel.find((m) => m.isAktif)
+
+    setInfoUjian((prev) => ({
+      ...prev,
+      mapelId: prev.mapelId || mapel?.id || "",
+      tahunAjaran: periode?.tahun ?? "",
+      semester: periode?.semester ?? "",
+    }))
+  }, [referensi, isEdit])
+
+  // Mode edit: isi state dari server satu kali saja, supaya refetch tidak menimpa editan
+  React.useEffect(() => {
+    if (!detail || hydrated) return
+    setHydrated(true)
+
+    setInfoUjian({
+      namaUjian: detail.nama,
+      mapelId: detail.mapelId,
+      jenisUjian: detail.jenis,
+      kelasIds: detail.kelasIds,
+      tahunAjaran: detail.tahunAjaran,
+      semester: detail.semester,
+      durasiMenit: detail.durasiMenit,
+      kkm: detail.kkm,
+      acakSoal: detail.acakSoal,
+      tampilkanHasil: detail.tampilkanHasil,
+    })
+
+    const list = soalFromDb(detail.soal)
+    const finalList = list.length > 0 ? list : [createSoal("Pilihan Ganda", `s-${Date.now()}`)]
+    setSoalList(finalList)
+    setOpenItems([finalList[0].id])
+  }, [detail, hydrated])
+
+  // ---------- OPSI PILIHAN DARI MASTER DATA ----------
+  // Mapel/kelas nonaktif tetap muncul kalau sudah terpilih (saat edit ujian lama)
+  const mapelOptions =
+    referensi?.mapel.filter((m) => m.isAktif || m.id === infoUjian.mapelId) ?? []
+  const kelasOptions =
+    referensi?.kelas.filter((k) => k.isAktif || infoUjian.kelasIds.includes(k.id)) ?? []
+  const tahunOptions = Array.from(new Set(referensi?.tahunAjaran.map((t) => t.tahun) ?? []))
+  const semesterOptions =
+    referensi?.tahunAjaran.filter((t) => t.tahun === infoUjian.tahunAjaran).map((t) => t.semester) ?? []
+
+  const mapelNama = referensi?.mapel.find((m) => m.id === infoUjian.mapelId)?.nama ?? ""
 
   const clearError = (key: string) => {
     setErrors((prev) => {
@@ -154,6 +318,20 @@ export default function CreateUjianPage() {
     clearError(field)
   }
 
+  // Ganti tahun ajaran: semester ikut menyesuaikan dengan yang tersedia untuk tahun itu
+  const handleTahunChange = (tahun: string) => {
+    const semesters =
+      referensi?.tahunAjaran.filter((t) => t.tahun === tahun).map((t) => t.semester) ?? []
+
+    setInfoUjian((prev) => ({
+      ...prev,
+      tahunAjaran: tahun,
+      semester: semesters.includes(prev.semester) ? prev.semester : semesters[0] ?? "",
+    }))
+    clearError("tahunAjaran")
+    clearError("semester")
+  }
+
   const startTour = React.useCallback(() => {
     driver({
       showProgress: true,
@@ -163,30 +341,16 @@ export default function CreateUjianPage() {
     }).drive()
   }, [])
 
+  // Tour otomatis hanya saat membuat ujian baru. Di mode edit tetap bisa lewat tombol (?)
   React.useEffect(() => {
+    if (isEdit) return
     const timer = setTimeout(startTour, 500)
     return () => clearTimeout(timer)
-  }, [startTour])
+  }, [startTour, isEdit])
 
-  const handleAddSoal = (tipe: "Pilihan Ganda" | "Essai") => {
+  const handleAddSoal = (tipe: TipeUI) => {
     const newId = `s-${Date.now()}`
-    const newSoal: SoalItem = {
-      id: newId,
-      pertanyaan: "",
-      tipe,
-      isMultipleChoice: false,
-      bobot: 10,
-      opsi:
-        tipe === "Pilihan Ganda"
-          ? Array.from({ length: 4 }, (_, i) => ({
-              id: i + 1,
-              label: String.fromCharCode(65 + i),
-              teks: "",
-              isBenar: i === 0,
-            }))
-          : [],
-    }
-    setSoalList((prev) => [...prev, newSoal])
+    setSoalList((prev) => [...prev, createSoal(tipe, newId)])
     setOpenItems((prev) => [...prev, newId])
   }
 
@@ -204,8 +368,8 @@ export default function CreateUjianPage() {
     })
   }
 
-  // --- HANDLER SIMPAN & PAYLOAD DATABASE MATCHING ---
-  const handleSave = async (status: "Draft" | "Siap Ujian") => {
+  // --- HANDLER SIMPAN ---
+  const handleSave = (status: StatusUjian) => {
     if (status === "Siap Ujian") {
       const validationResult = ujianSchema.safeParse({
         ...infoUjian,
@@ -234,53 +398,78 @@ export default function CreateUjianPage() {
         toast.error("Gagal menerbitkan ujian. Lengkapi semua data bertanda merah.")
         return
       }
+    } else if (!infoUjian.namaUjian.trim()) {
+      // Draft boleh belum lengkap, tapi butuh nama untuk dikenali
+      setErrors({ namaUjian: "Nama Ujian wajib diisi." })
+      toast.error("Isi nama ujian terlebih dahulu untuk menyimpan draft.")
+      return
     }
 
     setErrors({})
-    const totalBobot = soalList.reduce((acc, curr) => acc + (Number(curr.bobot) || 0), 0)
 
-    // Payload dipetakan sesuai kolom tabel mst_ujian & mst_soal_ujian
-    const payload = {
-      mst_ujian: {
-        nama_ujian: infoUjian.namaUjian,
-        mata_pelajaran: infoUjian.mataPelajaran,
-        jenis_ujian: infoUjian.jenisUjian,
-        target_kelas: infoUjian.targetKelas,
-        tahun_ajaran: infoUjian.tahunAjaran,
-        semester: infoUjian.semester,
-        durasi_menit: infoUjian.durasiMenit,
-        kkm: infoUjian.kkm,
-        acak_soal: infoUjian.acakSoal,
-        tampilkan_hasil: infoUjian.tampilkanHasil,
-        status,
-        total_soal: soalList.length,
-        total_bobot: totalBobot,
+    const body = {
+      nama: infoUjian.namaUjian,
+      mapelId: infoUjian.mapelId,
+      jenis: infoUjian.jenisUjian,
+      tahunAjaran: infoUjian.tahunAjaran,
+      semester: infoUjian.semester,
+      kelasIds: infoUjian.kelasIds,
+      durasiMenit: infoUjian.durasiMenit,
+      kkm: infoUjian.kkm,
+      acakSoal: infoUjian.acakSoal,
+      tampilkanHasil: infoUjian.tampilkanHasil,
+      status,
+      soal: soalToPayload(soalList),
+    }
+
+    saveMutation.mutate(body, {
+      onSuccess: () => {
+        toast.success(status === "Draft" ? "Draft ujian berhasil disimpan." : "Ujian berhasil diterbitkan!")
+        router.push(LIST_PATH)
       },
-      mst_soal_ujian: soalList.map((soal, idx) => ({
-        urutan: idx + 1,
-        pertanyaan: soal.pertanyaan,
-        tipe: soal.tipe,
-        is_multiple_choice: !!soal.isMultipleChoice,
-        bobot: soal.bobot,
-        opsi: soal.opsi, // Array JSONB langsung
-      })),
-    }
-
-    console.log("Saving Payload (Matching DB Schema):", payload)
-
-    if (status === "Draft") {
-      toast.success("Draft ujian berhasil disimpan.")
-    } else {
-      toast.success("Ujian berhasil diterbitkan!")
-    }
-
-    router.push("/dashboard/soal-ujian")
+      onError: (err) => {
+        toast.error(`Gagal menyimpan ujian: ${getErrorMessage(err)}`)
+      },
+    })
   }
 
   const handleOpenPreview = () => {
-    sessionStorage.setItem("previewUjianData", JSON.stringify({ ...infoUjian, soalList }))
+    // Halaman preview membaca nama mapel dan nama kelas, bukan id
+    const kelasNames =
+      referensi?.kelas.filter((k) => infoUjian.kelasIds.includes(k.id)).map((k) => k.namaKelas) ?? []
+
+    sessionStorage.setItem(
+      "previewUjianData",
+      JSON.stringify({
+        ...infoUjian,
+        mataPelajaran: mapelNama,
+        targetKelas: kelasNames,
+        soalList,
+      })
+    )
     window.open("/dashboard/soal-ujian/create/preview-soal", "_blank")
   }
+
+  if (isEdit && detailLoading && !hydrated) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Memuat ujian...
+      </div>
+    )
+  }
+
+  if (isEdit && detailError && !hydrated) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-24 text-sm text-muted-foreground">
+        <p>Gagal memuat ujian: {getErrorMessage(detailError)}</p>
+        <Link href={LIST_PATH} className="underline underline-offset-4">
+          Kembali ke daftar ujian
+        </Link>
+      </div>
+    )
+  }
+
+  const isSaving = saveMutation.isPending
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 space-y-6">
@@ -291,7 +480,7 @@ export default function CreateUjianPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-bold">Buat Soal Ujian Baru</h1>
+            <h1 className="text-xl font-bold">{isEdit ? "Edit Soal Ujian" : "Buat Soal Ujian Baru"}</h1>
             <p className="text-sm text-muted-foreground">Lengkapi konfigurasi dan butir soal.</p>
           </div>
         </div>
@@ -303,11 +492,11 @@ export default function CreateUjianPage() {
           <Button variant="outline" onClick={handleOpenPreview}>
             <Eye className="mr-2 h-4 w-4" /> Preview
           </Button>
-          <Button variant="outline" onClick={() => handleSave("Draft")}>
-            <Save className="mr-2 h-4 w-4" /> Draft
+          <Button variant="outline" onClick={() => handleSave("Draft")} disabled={isSaving}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Draft
           </Button>
-          <Button onClick={() => handleSave("Siap Ujian")}>
-            <CheckCircle2 className="mr-2 h-4 w-4" /> Terbitkan
+          <Button onClick={() => handleSave("Siap Ujian")} disabled={isSaving}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Terbitkan
           </Button>
         </div>
       </div>
@@ -325,6 +514,7 @@ export default function CreateUjianPage() {
               <Input
                 placeholder="Contoh: UTS Matematika X"
                 value={infoUjian.namaUjian}
+                maxLength={150}
                 onChange={(e) => handleInfoChange("namaUjian", e.target.value)}
                 className={errors["namaUjian"] ? "border-destructive" : ""}
               />
@@ -334,61 +524,94 @@ export default function CreateUjianPage() {
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2 grid gap-2">
                 <Label>Mapel <span className="text-destructive">*</span></Label>
-                <Select value={infoUjian.mataPelajaran} onValueChange={(v) => handleInfoChange("mataPelajaran", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{LIST_MAPEL.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                <Select
+                  value={infoUjian.mapelId}
+                  onValueChange={(v) => { if (v) handleInfoChange("mapelId", v) }}
+                >
+                  <SelectTrigger className={errors["mapelId"] ? "border-destructive" : ""}>
+                    <SelectValue>{mapelNama || "Pilih mapel"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mapelOptions.map((m) => <SelectItem key={m.id} value={m.id}>{m.nama}</SelectItem>)}
+                  </SelectContent>
                 </Select>
+                {errors["mapelId"] && <p className="text-xs text-destructive">{errors["mapelId"]}</p>}
               </div>
               <div className="grid gap-2">
                 <Label>Jenis <span className="text-destructive">*</span></Label>
-                <Select value={infoUjian.jenisUjian} onValueChange={(v) => handleInfoChange("jenisUjian", v)}>
+                <Select
+                  value={infoUjian.jenisUjian}
+                  onValueChange={(v) => { if (v) handleInfoChange("jenisUjian", v) }}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{LIST_JENIS.map((j) => <SelectItem key={j} value={j}>{j}</SelectItem>)}</SelectContent>
+                  <SelectContent>{JENIS_UJIAN.map((j) => <SelectItem key={j} value={j}>{j}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
 
             <div id="tour-distribusi-kelas" className="grid gap-2">
               <Label>Distribusi Kelas <span className="text-destructive">*</span></Label>
-              <div className={`grid grid-cols-2 gap-2 bg-muted/30 p-3 rounded-lg border ${errors["targetKelas"] ? "border-destructive" : ""}`}>
-                {LIST_KELAS.map((k) => (
-                  <div key={k} className="flex items-center space-x-2">
+              <div className={`grid grid-cols-2 gap-2 bg-muted/30 p-3 rounded-lg border ${errors["kelasIds"] ? "border-destructive" : ""}`}>
+                {kelasOptions.length === 0 && (
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Belum ada data kelas. Tambahkan dulu di Master Data &gt; Data Kelas.
+                  </p>
+                )}
+                {kelasOptions.map((k) => (
+                  <div key={k.id} className="flex items-center space-x-2">
                     <Checkbox
-                      id={`kelas-${k}`}
-                      checked={infoUjian.targetKelas.includes(k)}
+                      id={`kelas-${k.id}`}
+                      checked={infoUjian.kelasIds.includes(k.id)}
                       onCheckedChange={(checked) => {
                         const updated = checked
-                          ? [...infoUjian.targetKelas, k]
-                          : infoUjian.targetKelas.filter((item) => item !== k)
-                        handleInfoChange("targetKelas", updated)
+                          ? [...infoUjian.kelasIds, k.id]
+                          : infoUjian.kelasIds.filter((item) => item !== k.id)
+                        handleInfoChange("kelasIds", updated)
                       }}
                     />
-                    <Label className="text-xs font-normal cursor-pointer" htmlFor={`kelas-${k}`}>{k}</Label>
+                    <Label className="text-xs font-normal cursor-pointer" htmlFor={`kelas-${k.id}`}>{k.namaKelas}</Label>
                   </div>
                 ))}
               </div>
-              {errors["targetKelas"] && <p className="text-xs text-destructive">{errors["targetKelas"]}</p>}
+              {errors["kelasIds"] && <p className="text-xs text-destructive">{errors["kelasIds"]}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div className="grid gap-2">
                 <Label>Tahun Ajaran <span className="text-destructive">*</span></Label>
-                <Input
+                <Select
                   value={infoUjian.tahunAjaran}
-                  onChange={(e) => handleInfoChange("tahunAjaran", e.target.value)}
-                  className={errors["tahunAjaran"] ? "border-destructive" : ""}
-                />
+                  onValueChange={(v) => { if (v) handleTahunChange(v) }}
+                >
+                  <SelectTrigger className={errors["tahunAjaran"] ? "border-destructive" : ""}>
+                    <SelectValue>{infoUjian.tahunAjaran || "Pilih tahun ajaran"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tahunOptions.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
                 {errors["tahunAjaran"] && <p className="text-xs text-destructive">{errors["tahunAjaran"]}</p>}
               </div>
               <div className="grid gap-2">
                 <Label>Semester <span className="text-destructive">*</span></Label>
-                <Input
+                <Select
                   value={infoUjian.semester}
-                  onChange={(e) => handleInfoChange("semester", e.target.value)}
-                  className={errors["semester"] ? "border-destructive" : ""}
-                />
+                  onValueChange={(v) => { if (v) handleInfoChange("semester", v) }}
+                >
+                  <SelectTrigger className={errors["semester"] ? "border-destructive" : ""}>
+                    <SelectValue>{infoUjian.semester || "Pilih semester"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {semesterOptions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
                 {errors["semester"] && <p className="text-xs text-destructive">{errors["semester"]}</p>}
               </div>
+              {referensi && tahunOptions.length === 0 && (
+                <p className="col-span-2 text-xs text-muted-foreground">
+                  Belum ada tahun ajaran. Tambahkan dulu di Master Data &gt; Tahun Ajaran.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 pt-2 border-t">
@@ -442,9 +665,10 @@ export default function CreateUjianPage() {
               </Button>
             </div>
           </div>
+          {errors["soalList"] && <p className="text-xs text-destructive">{errors["soalList"]}</p>}
 
           <div id="tour-daftar-soal" className="max-h-[calc(100vh-180px)] overflow-y-auto pr-2 space-y-4">
-            <Accordion className="space-y-4" type="multiple" value={openItems} onValueChange={setOpenItems}>
+           <Accordion className="space-y-4" value={openItems} onValueChange={setOpenItems}>
               {soalList.map((soal, sIdx) => (
                 <SoalItemCard
                   key={soal.id}
@@ -510,8 +734,7 @@ function SoalItemCard({ soal, index, errors, clearError, canDelete, onRemove, on
   }
 
   const handleUpdateOpsiTeks = (oIdx: number, teks: string) => {
-    const updatedOpsi = [...soal.opsi]
-    updatedOpsi[oIdx].teks = teks
+    const updatedOpsi = soal.opsi.map((o, i) => (i === oIdx ? { ...o, teks } : o))
 
     if (teks.trim().length > 0) {
       clearError(`soalList.${index}.opsi.${oIdx}.teks`)
@@ -638,6 +861,7 @@ function SoalItemCard({ soal, index, errors, clearError, canDelete, onRemove, on
                       <Input
                         placeholder={`Pilihan ${opsi.label}...`}
                         value={opsi.teks}
+                        maxLength={1000}
                         onChange={(e) => handleUpdateOpsiTeks(oIdx, e.target.value)}
                         className={opsiTxtErr ? "border-destructive" : ""}
                       />
