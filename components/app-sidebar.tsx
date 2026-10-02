@@ -53,10 +53,6 @@ const data = {
           url: "/dashboard/master/data-kelas",
         },
         {
-          title: "Data Pengguna",
-          url: "/dashboard/master/data-pengguna",
-        },
-        {
           title: "Template e-Rapor",
           url: "/dashboard/master/template-rapor",
         },

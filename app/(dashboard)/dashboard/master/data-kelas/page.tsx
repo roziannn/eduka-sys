@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Pencil, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
+import { Plus, Pencil, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -10,29 +12,46 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
+
+type Tingkat = "10" | "11" | "12"
 
 interface Kelas {
   id: string
   namaKelas: string
-  tingkat: "10" | "11" | "12"
+  tingkat: Tingkat
   jurusan: string
   kapasitas: number
   isAktif: boolean
   createdAt: string
+  createdBy: string
 }
 
-const initialData: Kelas[] = [
-  { id: "1", namaKelas: "X IPA 1", tingkat: "10", jurusan: "MIPA", kapasitas: 36, isAktif: true, createdAt: "2025-01-10" },
-  { id: "2", namaKelas: "X IPS 1", tingkat: "10", jurusan: "IPS", kapasitas: 35, isAktif: true, createdAt: "2025-01-10" },
-  { id: "3", namaKelas: "XI IPA 2", tingkat: "11", jurusan: "MIPA", kapasitas: 34, isAktif: true, createdAt: "2025-01-12" },
-  { id: "4", namaKelas: "XII IPS 3", tingkat: "12", jurusan: "IPS", kapasitas: 36, isAktif: false, createdAt: "2025-02-01" },
+const KELAS_KEY = ["kelas"]
+
+const COLUMNS: { key: keyof Kelas; label: string }[] = [
+  { key: "namaKelas", label: "Nama Kelas" },
+  { key: "tingkat", label: "Tingkat" },
+  { key: "jurusan", label: "Jurusan" },
+  { key: "kapasitas", label: "Kapasitas" },
+  { key: "isAktif", label: "Status" },
+  { key: "createdAt", label: "Tanggal Dibuat" },
+  { key: "createdBy", label: "Dibuat Oleh" },
 ]
 
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+
 export default function KelasPage() {
-  const [data, setData] = React.useState<Kelas[]>(initialData)
+  const queryClient = useQueryClient()
+
   const [search, setSearch] = React.useState("")
   const [sort, setSort] = React.useState<{ col: keyof Kelas | null; dir: "asc" | "desc" }>({ col: null, dir: "asc" })
-  
+
   // Pagination
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(5)
@@ -42,13 +61,36 @@ export default function KelasPage() {
   const [editItem, setEditItem] = React.useState<Kelas | null>(null)
   const [form, setForm] = React.useState({
     namaKelas: "",
-    tingkat: "10" as "10" | "11" | "12",
+    tingkat: "10" as Tingkat,
     jurusan: "MIPA",
     kapasitas: 36,
     isAktif: true,
   })
 
-  // Toggle Sort
+  const {
+    data = [],
+    isLoading,
+    error: dataError,
+  } = useQuery<Kelas[]>({
+    queryKey: KELAS_KEY,
+    queryFn: () => fetchJson<Kelas[]>("/api/kelas"),
+  })
+
+  React.useEffect(() => {
+    if (dataError) {
+      toast.error(`Gagal memuat data: ${getErrorMessage(dataError)}`)
+    }
+  }, [dataError])
+
+  const saveMutation = useMutation({
+    mutationFn: (input: { id?: string; body: Record<string, unknown> }) =>
+      fetchJson(input.id ? `/api/kelas/${input.id}` : "/api/kelas", {
+        method: input.id ? "PUT" : "POST",
+        body: input.body,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KELAS_KEY }),
+  })
+
   const handleSort = (col: keyof Kelas) => {
     setSort((prev) => ({
       col,
@@ -56,10 +98,17 @@ export default function KelasPage() {
     }))
   }
 
-  // Filter & Sort Logic
   const processedData = React.useMemo(() => {
-    let result = data.filter((item) =>
-      Object.values(item).some((val) => String(val).toLowerCase().includes(search.toLowerCase()))
+    const keyword = search.toLowerCase()
+    const result = data.filter(
+      (item) =>
+        item.namaKelas.toLowerCase().includes(keyword) ||
+        `kelas ${item.tingkat}`.includes(keyword) ||
+        item.jurusan.toLowerCase().includes(keyword) ||
+        `${item.kapasitas} siswa`.includes(keyword) ||
+        (item.isAktif ? "aktif" : "tidak aktif").includes(keyword) ||
+        formatDate(item.createdAt).toLowerCase().includes(keyword) ||
+        item.createdBy.toLowerCase().includes(keyword)
     )
 
     if (sort.col) {
@@ -73,11 +122,9 @@ export default function KelasPage() {
     return result
   }, [data, search, sort])
 
-  // Paginated Data
   const totalPages = Math.ceil(processedData.length / pageSize) || 1
   const paginatedData = processedData.slice((page - 1) * pageSize, page * pageSize)
 
-  // Open Dialog
   const handleOpen = (item?: Kelas) => {
     setEditItem(item || null)
     setForm(
@@ -88,25 +135,21 @@ export default function KelasPage() {
     setOpen(true)
   }
 
-  // Save (Create/Update)
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
-    setData((prev) => {
-      if (editItem) {
-        return prev.map((i) => (i.id === editItem.id ? { ...i, ...form } : i))
-      }
-      return [
-        ...prev,
-        { id: Date.now().toString(), ...form, createdAt: new Date().toISOString().split("T")[0] },
-      ]
-    })
-    setOpen(false)
-  }
+    const isEdit = Boolean(editItem)
 
-  // Toggle Status Switch Direct
-  const handleToggle = (id: string) => {
-    setData((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, isAktif: !item.isAktif } : item))
+    saveMutation.mutate(
+      { id: editItem?.id, body: form },
+      {
+        onSuccess: () => {
+          toast.success(`Kelas berhasil ${isEdit ? "diperbarui" : "ditambahkan"}!`)
+          setOpen(false)
+        },
+        onError: (err) => {
+          toast.error(`${isEdit ? "Gagal memperbarui" : "Gagal menambah"} kelas: ${getErrorMessage(err)}`)
+        },
+      }
     )
   }
 
@@ -132,21 +175,11 @@ export default function KelasPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="w-[50px]">No</TableHead>
-              {(["namaKelas", "tingkat", "jurusan", "kapasitas", "isAktif", "createdAt"] as const).map((col) => (
-                <TableHead key={col}>
-                  <Button variant="ghost" size="sm" onClick={() => handleSort(col)} className="-ml-3 h-8">
-                    {col === "namaKelas"
-                      ? "Nama Kelas"
-                      : col === "tingkat"
-                      ? "Tingkat"
-                      : col === "jurusan"
-                      ? "Jurusan"
-                      : col === "kapasitas"
-                      ? "Kapasitas"
-                      : col === "isAktif"
-                      ? "Status"
-                      : "Tanggal Dibuat"}
-                    {sort.col === col ? (
+              {COLUMNS.map((col) => (
+                <TableHead key={col.key}>
+                  <Button variant="ghost" size="sm" onClick={() => handleSort(col.key)} className="-ml-3 h-8">
+                    {col.label}
+                    {sort.col === col.key ? (
                       sort.dir === "asc" ? <ArrowUp className="ml-1 h-3.5 w-3.5" /> : <ArrowDown className="ml-1 h-3.5 w-3.5" />
                     ) : (
                       <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/60" />
@@ -154,18 +187,26 @@ export default function KelasPage() {
                   </Button>
                 </TableHead>
               ))}
-              <TableHead className="text-right">Aksi</TableHead>
+              <TableHead>Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedData.length ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="h-24 text-center">
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Memuat data...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : paginatedData.length ? (
               paginatedData.map((item, i) => (
                 <TableRow key={item.id}>
                   <TableCell>{(page - 1) * pageSize + i + 1}</TableCell>
                   <TableCell className="font-semibold">{item.namaKelas}</TableCell>
                   <TableCell>Kelas {item.tingkat}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{item.jurusan}</Badge>
+                    {item.jurusan ? <Badge variant="outline">{item.jurusan}</Badge> : "-"}
                   </TableCell>
                   <TableCell>{item.kapasitas} Siswa</TableCell>
                   <TableCell>
@@ -175,8 +216,9 @@ export default function KelasPage() {
                       </Badge>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{item.createdAt}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-sm">{formatDate(item.createdAt)}</TableCell>
+                  <TableCell className="text-sm">{item.createdBy}</TableCell>
+                  <TableCell>
                     <Button variant="outline" size="sm" onClick={() => handleOpen(item)}>
                       <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
                     </Button>
@@ -185,7 +227,7 @@ export default function KelasPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                   Data tidak ditemukan.
                 </TableCell>
               </TableRow>
@@ -197,7 +239,7 @@ export default function KelasPage() {
         <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>Baris per halaman</span>
-            <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1) }}>
+            <Select value={String(pageSize)} onValueChange={(v) => { if (v) setPageSize(Number(v)); setPage(1) }}>
               <SelectTrigger className="h-8 w-[65px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {[5, 10, 20].map((n) => (
@@ -237,6 +279,7 @@ export default function KelasPage() {
                   placeholder="Contoh: X IPA 1"
                   value={form.namaKelas}
                   onChange={(e) => setForm({ ...form, namaKelas: e.target.value })}
+                  maxLength={50}
                   required
                 />
               </div>
@@ -245,7 +288,7 @@ export default function KelasPage() {
                 <Label htmlFor="tingkat">Tingkat</Label>
                 <Select
                   value={form.tingkat}
-                  onValueChange={(v) => setForm({ ...form, tingkat: v as "10" | "11" | "12" })}
+                  onValueChange={(v) => { if (v) setForm({ ...form, tingkat: v as Tingkat }) }}
                 >
                   <SelectTrigger id="tingkat">
                     <SelectValue />
@@ -265,6 +308,7 @@ export default function KelasPage() {
                   placeholder="Contoh: MIPA / IPS / Rekayasa Perangkat Lunak"
                   value={form.jurusan}
                   onChange={(e) => setForm({ ...form, jurusan: e.target.value })}
+                  maxLength={50}
                   required
                 />
               </div>
@@ -275,6 +319,8 @@ export default function KelasPage() {
                   id="kapasitas"
                   type="number"
                   placeholder="36"
+                  min={1}
+                  max={200}
                   value={form.kapasitas}
                   onChange={(e) => setForm({ ...form, kapasitas: Number(e.target.value) })}
                   required
@@ -294,10 +340,12 @@ export default function KelasPage() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saveMutation.isPending}>
                 Batal
               </Button>
-              <Button type="submit">Simpan</Button>
+              <Button type="submit" disabled={saveMutation.isPending}>
+                {saveMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</> : "Simpan"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

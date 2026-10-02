@@ -12,9 +12,9 @@ import { TableRow } from "@tiptap/extension-table-row"
 import { TableHeader } from "@tiptap/extension-table-header"
 import { TableCell } from "@tiptap/extension-table-cell"
 import { Extension } from "@tiptap/core"
-import { 
-  Bold, Italic, Underline as UnderlineIcon, 
-  Heading1, Heading2, Heading3, 
+import {
+  Bold, Italic, Underline as UnderlineIcon,
+  Heading1, Heading2, Heading3,
   Image as ImageIcon, Sigma,
   AlignLeft, AlignCenter, AlignRight,
   Table as TableIcon, Plus, Trash2,
@@ -141,16 +141,63 @@ const CustomIndent = Extension.create({
   },
 })
 
+// Tombol toolbar: mencegah editor kehilangan fokus saat diklik
+interface ToolbarButtonProps {
+  onAction: () => void
+  active?: boolean
+  disabled?: boolean
+  title?: string
+  children: React.ReactNode
+}
+
+function ToolbarButton({ onAction, active, disabled, title, children }: ToolbarButtonProps) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={active ? "default" : "ghost"}
+      disabled={disabled}
+      title={title}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onAction()
+      }}
+      className="h-8.5 w-8.5 p-0 shrink-0"
+    >
+      {children}
+    </Button>
+  )
+}
+
+const Divider = () => <div className="w-[1px] h-4 bg-border mx-0.5 shrink-0" />
+
+// Fitur toolbar yang bisa dimatikan. Default: semua tampil.
+export interface RichTextFeatures {
+  history?: boolean // tombol undo & redo
+  heading?: boolean
+  table?: boolean
+  image?: boolean
+  math?: boolean
+}
+
 interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
-  isError?: boolean //
+  isError?: boolean
+  features?: RichTextFeatures
 }
 
-export default function RichTextEditor({ value, onChange, isError }: RichTextEditorProps) {
+export default function RichTextEditor({ value, onChange, isError, features }: RichTextEditorProps) {
+  const showHistory = features?.history ?? true
+  const showHeading = features?.heading ?? true
+  const showTable = features?.table ?? true
+  const showImage = features?.image ?? true
+  const showMath = features?.math ?? true
+
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0)
-  
+
   // Ref untuk input file tersembunyi
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
 
@@ -159,6 +206,8 @@ export default function RichTextEditor({ value, onChange, isError }: RichTextEdi
   const [uploadProgress, setUploadProgress] = React.useState(0)
 
   const editor = useEditor({
+    // Hindari mismatch hidrasi saat halaman dirender di server
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: {
@@ -252,319 +301,197 @@ export default function RichTextEditor({ value, onChange, isError }: RichTextEdi
   }
 
   const isTableActive = editor.isActive("table")
+  const isInList = editor.isActive("bulletList") || editor.isActive("orderedList")
 
   return (
     <div className="border border-input rounded-md bg-background overflow-hidden shadow-sm flex flex-col">
       {/* Input File Tersembunyi */}
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        accept="image/*" 
-        className="hidden" 
-      />
+      {showImage && (
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept="image/*"
+          className="hidden"
+        />
+      )}
 
-      {/* Toolbar */}
-      <div 
-        className="flex flex-nowrap items-center gap-0.5 p-1 border-b bg-muted/40 shrink-0 select-none overflow-x-auto scrollbar-none"
+      {/* Toolbar: membungkus ke baris berikutnya kalau tidak muat */}
+      <div
+        className="flex flex-wrap items-center gap-0.5 p-1 border-b bg-muted/40 shrink-0 select-none"
         onMouseDown={(e) => e.preventDefault()}
       >
         {/* Undo & Redo */}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().undo().run()
-          }}
-          disabled={!editor.can().undo()}
-          className="h-8.5 w-8.5 p-0 shrink-0"
-          title="Undo (Ctrl+Z)"
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().redo().run()
-          }}
-          disabled={!editor.can().redo()}
-          className="h-8.5 w-8.5 p-0 shrink-0"
-          title="Redo (Ctrl+Y)"
-        >
-          <Redo2 className="h-3.5 w-3.5" />
-        </Button>
+        {showHistory && (
+          <>
+            <ToolbarButton
+              onAction={() => editor.chain().focus().undo().run()}
+              disabled={!editor.can().undo()}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              onAction={() => editor.chain().focus().redo().run()}
+              disabled={!editor.can().redo()}
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </ToolbarButton>
 
-        <div className="w-[1px] h-4 bg-border mx-0.5 shrink-0" />
+            <Divider />
+          </>
+        )}
 
         {/* Formatting */}
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive("bold") ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().toggleBold().run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
+        <ToolbarButton
+          active={editor.isActive("bold")}
+          onAction={() => editor.chain().focus().toggleBold().run()}
+          title="Bold"
         >
           <Bold className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive("italic") ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().toggleItalic().run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
+        </ToolbarButton>
+        <ToolbarButton
+          active={editor.isActive("italic")}
+          onAction={() => editor.chain().focus().toggleItalic().run()}
+          title="Italic"
         >
           <Italic className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive("underline") ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().toggleUnderline().run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
+        </ToolbarButton>
+        <ToolbarButton
+          active={editor.isActive("underline")}
+          onAction={() => editor.chain().focus().toggleUnderline().run()}
+          title="Underline"
         >
           <UnderlineIcon className="h-3.5 w-3.5" />
-        </Button>
+        </ToolbarButton>
 
-        <div className="w-[1px] h-4 bg-border mx-0.5 shrink-0" />
+        <Divider />
 
         {/* List & Indentation */}
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive("bulletList") ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().toggleBulletList().run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
+        <ToolbarButton
+          active={editor.isActive("bulletList")}
+          onAction={() => editor.chain().focus().toggleBulletList().run()}
           title="Bullet List"
         >
           <List className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive("orderedList") ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().toggleOrderedList().run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
+        </ToolbarButton>
+        <ToolbarButton
+          active={editor.isActive("orderedList")}
+          onAction={() => editor.chain().focus().toggleOrderedList().run()}
           title="Numbered List"
         >
           <ListOrdered className="h-3.5 w-3.5" />
-        </Button>
-
-        {/* Outdent */}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
+        </ToolbarButton>
+        <ToolbarButton
+          onAction={() => {
+            if (isInList) {
               editor.chain().focus().liftListItem("listItem").run()
             } else {
               editor.chain().focus().outdent().run()
             }
           }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
           title="Outdent"
         >
           <Outdent className="h-3.5 w-3.5" />
-        </Button>
-
-        {/* Indent */}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
+        </ToolbarButton>
+        <ToolbarButton
+          onAction={() => {
+            if (isInList) {
               editor.chain().focus().sinkListItem("listItem").run()
             } else {
               editor.chain().focus().indent().run()
             }
           }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
           title="Indent"
         >
           <Indent className="h-3.5 w-3.5" />
-        </Button>
+        </ToolbarButton>
 
-        <div className="w-[1px] h-4 bg-border mx-0.5 shrink-0" />
+        <Divider />
 
         {/* Alignment */}
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive({ textAlign: "left" }) ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().setTextAlign("left").run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
+        <ToolbarButton
+          active={editor.isActive({ textAlign: "left" })}
+          onAction={() => editor.chain().focus().setTextAlign("left").run()}
           title="Rata Kiri"
         >
           <AlignLeft className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive({ textAlign: "center" }) ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().setTextAlign("center").run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
+        </ToolbarButton>
+        <ToolbarButton
+          active={editor.isActive({ textAlign: "center" })}
+          onAction={() => editor.chain().focus().setTextAlign("center").run()}
           title="Rata Tengah"
         >
           <AlignCenter className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive({ textAlign: "right" }) ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().setTextAlign("right").run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
+        </ToolbarButton>
+        <ToolbarButton
+          active={editor.isActive({ textAlign: "right" })}
+          onAction={() => editor.chain().focus().setTextAlign("right").run()}
           title="Rata Kanan"
         >
           <AlignRight className="h-3.5 w-3.5" />
-        </Button>
-
-        <div className="w-[1px] h-4 bg-border mx-0.5 shrink-0" />
+        </ToolbarButton>
 
         {/* Headings */}
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive("heading", { level: 1 }) ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().toggleHeading({ level: 1 }).run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
-        >
-          <Heading1 className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive("heading", { level: 2 }) ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().toggleHeading({ level: 2 }).run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
-        >
-          <Heading2 className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={editor.isActive("heading", { level: 3 }) ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            editor.chain().focus().toggleHeading({ level: 3 }).run()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
-        >
-          <Heading3 className="h-3.5 w-3.5" />
-        </Button>
-
-        <div className="w-[1px] h-4 bg-border mx-0.5 shrink-0" />
+        {showHeading && (
+          <>
+            <Divider />
+            <ToolbarButton
+              active={editor.isActive("heading", { level: 1 })}
+              onAction={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              title="Heading 1"
+            >
+              <Heading1 className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("heading", { level: 2 })}
+              onAction={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              title="Heading 2"
+            >
+              <Heading2 className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("heading", { level: 3 })}
+              onAction={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+              title="Heading 3"
+            >
+              <Heading3 className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          </>
+        )}
 
         {/* Insert Options */}
-        <Button
-          type="button"
-          size="sm"
-          variant={isTableActive ? "default" : "ghost"}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            addTable()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
-          title="Buat Tabel (3x3)"
-        >
-          <TableIcon className="h-3.5 w-3.5" />
-        </Button>
+        {(showTable || showImage || showMath) && <Divider />}
 
-        {/* Tombol Upload Gambar */}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={isUploading}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            handleImageClick()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
-          title="Upload Gambar"
-        >
-          {isUploading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-          ) : (
-            <ImageIcon className="h-3.5 w-3.5" />
-          )}
-        </Button>
+        {showTable && (
+          <ToolbarButton active={isTableActive} onAction={addTable} title="Buat Tabel (3x3)">
+            <TableIcon className="h-3.5 w-3.5" />
+          </ToolbarButton>
+        )}
 
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            addMath()
-          }}
-          className="h-8.5 w-8.5 p-0 shrink-0"
-          title="Masukkan Rumus LaTeX"
-        >
-          <Sigma className="h-3.5 w-3.5" />
-        </Button>
+        {showImage && (
+          <ToolbarButton disabled={isUploading} onAction={handleImageClick} title="Upload Gambar">
+            {isUploading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            ) : (
+              <ImageIcon className="h-3.5 w-3.5" />
+            )}
+          </ToolbarButton>
+        )}
+
+        {showMath && (
+          <ToolbarButton onAction={addMath} title="Masukkan Rumus LaTeX">
+            <Sigma className="h-3.5 w-3.5" />
+          </ToolbarButton>
+        )}
       </div>
 
       {/* Progress Bar Animasi saat Upload Gambar */}
       {isUploading && (
         <div className="w-full bg-muted/60 px-3 py-1.5 border-b flex items-center gap-3">
           <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden border">
-            <div 
+            <div
               className="bg-primary h-full transition-all duration-150 ease-out rounded-full"
               style={{ width: `${uploadProgress}%` }}
             />
@@ -576,14 +503,14 @@ export default function RichTextEditor({ value, onChange, isError }: RichTextEdi
       )}
 
       {/* Area Teks & Editor */}
-      <div 
+      <div
         className={`p-3 bg-background m-2 rounded-md border transition-all flex flex-col focus-within:border-ring focus-within:ring-1 focus-within:ring-ring cursor-text ${
           isError ? "border-destructive focus-within:border-destructive focus-within:ring-destructive" : "border-input"
         }`}
         onClick={() => editor.chain().focus().run()}
       >
-        <EditorContent 
-          editor={editor} 
+        <EditorContent
+          editor={editor}
           className="
             w-full min-h-[100px] prose prose-sm max-w-none
             [&_p]:m-0
@@ -632,7 +559,7 @@ export default function RichTextEditor({ value, onChange, isError }: RichTextEdi
 
         {/* Action Bar Tabel */}
         {isTableActive && (
-          <div 
+          <div
             className="mt-2 pt-2 border-t border-dashed border-border flex flex-wrap items-center justify-between gap-2 shrink-0 select-none"
             onMouseDown={(e) => e.preventDefault()}
           >

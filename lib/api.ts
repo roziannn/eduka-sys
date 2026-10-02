@@ -16,6 +16,9 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   username: "Username sudah dipakai",
   role: "Nama role sudah ada",
   periode: "Periode tahun ajaran dan semester tersebut sudah ada",
+  kode: "Kode mata pelajaran sudah dipakai",
+  kelas: "Nama kelas sudah dipakai",
+  templaterapor: "Nama template sudah dipakai",
 }
 
 export async function requireAdmin() {

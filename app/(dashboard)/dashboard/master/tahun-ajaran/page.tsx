@@ -187,8 +187,8 @@ export default function TahunAjaranPage() {
                     </Badge>
                   </div>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{formatDate(item.createdAt)}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{item.createdBy}</TableCell>
+                <TableCell className="text-sm">{formatDate(item.createdAt)}</TableCell>
+                <TableCell className="text-sm">{item.createdBy}</TableCell>
                 <TableCell>
                   <Button variant="outline" size="sm" onClick={() => handleOpen(item)}>
                     <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
