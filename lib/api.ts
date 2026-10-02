@@ -15,6 +15,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   email: "Email sudah terdaftar",
   username: "Username sudah dipakai",
   role: "Nama role sudah ada",
+  periode: "Periode tahun ajaran dan semester tersebut sudah ada",
 }
 
 export async function requireAdmin() {
@@ -52,6 +53,7 @@ export function handleError(err: unknown) {
   }
 
   const e = err as { code?: string; constraint?: string }
+
   if (e?.code === "23505") {
     const key = Object.keys(UNIQUE_MESSAGES).find((k) =>
       e.constraint?.includes(k)
@@ -59,6 +61,13 @@ export function handleError(err: unknown) {
     return NextResponse.json(
       { error: key ? UNIQUE_MESSAGES[key] : "Data sudah ada" },
       { status: 409 }
+    )
+  }
+
+  if (e?.code === "22P02") {
+    return NextResponse.json(
+      { error: "Data tidak ditemukan" },
+      { status: 404 }
     )
   }
 
