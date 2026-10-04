@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto"
 import type { PoolClient } from "pg"
 import { query, queryOne, withTransaction } from "@/lib/db"
 import type { UjianDataJson } from "@/types/soal-ujian"
@@ -17,6 +18,9 @@ export type SoalUjianListRecord = {
   jumlah_soal: number
   total_bobot: number
   kelas: string[]
+  token: string | null
+  token_open: boolean
+  token_expires_at: Date | null
   created_by_name: string | null
 }
 
@@ -48,6 +52,48 @@ export type SoalUjianInput = {
   status: string
   dataJson: UjianDataJson
   kelasIds: string[]
+}
+
+// ---------- TOKEN UJIAN ----------
+// Tanpa I, L, O, 0, 1 supaya tidak tertukar saat dibaca atau diketik
+const TOKEN_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+const TOKEN_LENGTH = 6
+const TOKEN_MAX_RETRY = 10
+
+function generateToken() {
+  let token = ""
+  for (let i = 0; i < TOKEN_LENGTH; i++) {
+    token += TOKEN_ALPHABET[randomInt(TOKEN_ALPHABET.length)]
+  }
+  return token
+}
+
+// Buat token aktif untuk ujian. Kalau token bentrok dengan token aktif lain,
+// ON CONFLICT DO NOTHING tidak mengembalikan baris, lalu dicoba token baru.
+// (Pelanggaran unique tanpa ON CONFLICT akan menggagalkan seluruh transaksi.)
+async function createToken(client: PoolClient, ujianId: string, userId: string) {
+  for (let attempt = 0; attempt < TOKEN_MAX_RETRY; attempt++) {
+    const res = await client.query<{ token: string }>(
+      `INSERT INTO "MST_TokenUjian" (soal_ujian_id, token, created_by, updated_by)
+       VALUES ($1, $2, $3, $3)
+       ON CONFLICT DO NOTHING
+       RETURNING token`,
+      [ujianId, generateToken(), userId]
+    )
+    if (res.rows.length > 0) return res.rows[0].token
+  }
+  throw new Error("Gagal membuat token ujian setelah beberapa percobaan")
+}
+
+// Ujian kembali ke Draft: tutup akses supaya status di token tidak menyala sendiri
+async function closeToken(client: PoolClient, ujianId: string, userId: string) {
+  await client.query(
+    `UPDATE "MST_TokenUjian"
+     SET is_open = FALSE, closed_at = NOW(), expires_at = NULL,
+         updated_by = $2, updated_at = NOW()
+     WHERE soal_ujian_id = $1 AND is_active AND is_open`,
+    [ujianId, userId]
+  )
 }
 
 // Samakan distribusi kelas dengan daftar baru: hapus yang tidak dipilih lagi, tambah yang baru.
@@ -106,6 +152,9 @@ export const soalUjianRepository = {
     return row?.id ?? null
   },
 
+  // Token aktif ikut dibawa. Index unik menjamin maksimal satu token aktif per ujian,
+  // jadi LEFT JOIN tidak menggandakan baris.
+  // token_open sudah memperhitungkan kedaluwarsa; token_expires_at hanya terisi saat terbuka.
   findAll() {
     return query<SoalUjianListRecord>(
       `SELECT s.id, s.nama, s.jenis, s.status, s.durasi_menit, s.nilai_kkm,
@@ -123,10 +172,17 @@ export const soalUjianRepository = {
                 WHERE sk.soal_ujian_id = s.id
                 ORDER BY k.tingkat, k.nama_kelas
               ) AS kelas,
+              tk.token AS token,
+              COALESCE(tk.is_open AND (tk.expires_at IS NULL OR tk.expires_at > NOW()), FALSE) AS token_open,
+              CASE
+                WHEN tk.is_open AND (tk.expires_at IS NULL OR tk.expires_at > NOW())
+                  THEN tk.expires_at
+              END AS token_expires_at,
               COALESCE(u.full_name, u.username) AS created_by_name
        FROM "MST_SoalUjian" s
        JOIN "MST_MataPelajaran" m ON m.id = s.mapel_id
        JOIN "MST_TahunAjaran" t ON t.id = s.tahun_ajaran_id
+       LEFT JOIN "MST_TokenUjian" tk ON tk.soal_ujian_id = s.id AND tk.is_active
        LEFT JOIN "CORE_User" u ON u.id = s.created_by
        ORDER BY s.updated_at DESC`
     )
@@ -149,7 +205,7 @@ export const soalUjianRepository = {
     )
   },
 
-  // Simpan ujian dan distribusi kelasnya dalam satu transaksi.
+  // Simpan ujian, distribusi kelas, dan token dalam satu transaksi.
   // 12 kolom = 12 ekspresi VALUES ($11 dipakai dua kali: created_by dan updated_by),
   // jadi array parameternya berisi 11 nilai.
   create(input: SoalUjianInput, userId: string) {
@@ -175,12 +231,17 @@ export const soalUjianRepository = {
         ]
       )
       const id = res.rows[0].id
+
       await syncKelas(client, id, input.kelasIds, userId)
+      await createToken(client, id, userId)
+
       return id
     })
   },
 
   // false kalau data tidak ditemukan. $1 = id, $2..$12 = isi kolom (12 parameter).
+  // Token tidak diganti saat ujian diedit. Kalau status disimpan sebagai Draft,
+  // aksesnya ditutup.
   update(id: string, input: SoalUjianInput, userId: string) {
     return withTransaction(async (client) => {
       const res = await client.query(
@@ -209,6 +270,8 @@ export const soalUjianRepository = {
       if (res.rowCount === 0) return false
 
       await syncKelas(client, id, input.kelasIds, userId)
+      if (input.status === "Draft") await closeToken(client, id, userId)
+
       return true
     })
   },

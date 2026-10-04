@@ -68,16 +68,8 @@ const data = {
           url: "/dashboard/soal-ujian",
         },
         {
-          title: "Soal Kuis",
-          url: "/dashboard/soal-kuis",
-        },
-        {
           title: "Hasil Ujian",
           url: "/dashboard/hasil-ujian",
-        },
-        {
-          title: "Hasil Kuis",
-          url: "/dashboard/hasil-kuis",
         },
       ],
     },

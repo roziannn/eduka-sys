@@ -175,7 +175,7 @@ const TOUR_STEPS = [
   { element: "#tour-action-buttons", popover: { title: "Aksi Ujian", description: "Preview, simpan draft, atau terbitkan.", side: "bottom", align: "end" } },
 ]
 
-// Suspense wajib karena UjianForm memakai useSearchParams
+// Suspense wajib karena UjianFormRoot memakai useSearchParams
 export default function CreateUjianPage() {
   return (
     <React.Suspense
@@ -185,56 +185,127 @@ export default function CreateUjianPage() {
         </div>
       }
     >
-      <UjianForm />
+      <UjianFormRoot />
     </React.Suspense>
   )
 }
 
-function UjianForm() {
-  const router = useRouter()
+// Satu halaman untuk create dan edit: ada ?id=... berarti edit, tanpa id berarti ujian baru.
+// key = id supaya seluruh state di-reset saat pindah antar ujian atau dari edit ke baru
+// (Next.js tidak me-mount ulang komponen kalau hanya query string yang berubah).
+function UjianFormRoot() {
   const searchParams = useSearchParams()
-  const queryClient = useQueryClient()
-
-  // Ada ?id=... berarti mode edit, tanpa id berarti ujian baru
   const ujianId = searchParams.get("id")
-  const isEdit = ujianId !== null
 
-  const [infoUjian, setInfoUjian] = React.useState({
-    namaUjian: "",
-    mapelId: "",
-    jenisUjian: "UTS" as string,
-    kelasIds: [] as string[],
-    tahunAjaran: "",
-    semester: "",
-    durasiMenit: 90,
-    kkm: 75,
-    acakSoal: true,
-    tampilkanHasil: false,
+  return <UjianLoader key={ujianId ?? "baru"} ujianId={ujianId} />
+}
+
+// Mode edit: data diambil DULU, form baru dibuat setelah data siap.
+// State form diisi dari data itu saat dibuat (bukan lewat efek), jadi editor teks
+// langsung dibuat dengan isi yang benar. Editor hanya membaca isinya sekali saat dibuat.
+function UjianLoader({ ujianId }: { ujianId: string | null }) {
+  const {
+    data: detail,
+    isLoading,
+    error,
+  } = useQuery<UjianDetail>({
+    queryKey: [...UJIAN_KEY, ujianId],
+    queryFn: () => fetchJson<UjianDetail>(`/api/soal-ujian/${ujianId}`),
+    enabled: ujianId !== null,
+    // Selalu ambil data segar saat halaman dibuka, dan tidak ada refetch di belakang layar
+    // yang bisa menumpuk dengan editan yang sedang berjalan
+    gcTime: 0,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
-  const [openItems, setOpenItems] = React.useState<string[]>(["s-1"])
-  const [soalList, setSoalList] = React.useState<SoalItem[]>([createSoal("Pilihan Ganda", "s-1")])
+  if (ujianId === null) {
+    return <UjianForm ujianId={null} initial={null} />
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Memuat ujian...
+      </div>
+    )
+  }
+
+  if (error || !detail) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-24 text-sm text-muted-foreground">
+        <p>Gagal memuat ujian: {error ? getErrorMessage(error) : "Data tidak ditemukan"}</p>
+        <Link href={LIST_PATH} className="underline underline-offset-4">
+          Kembali ke daftar ujian
+        </Link>
+      </div>
+    )
+  }
+
+  return <UjianForm ujianId={ujianId} initial={detail} />
+}
+
+interface UjianFormProps {
+  ujianId: string | null
+  initial: UjianDetail | null
+}
+
+function UjianForm({ ujianId, initial }: UjianFormProps) {
+  const router = useRouter()
+  const queryClient = useQueryClient()
+
+  const isEdit = ujianId !== null
+
+  // State awal diisi langsung dari data server (mode edit) atau default (ujian baru)
+  const [infoUjian, setInfoUjian] = React.useState(() =>
+    initial
+      ? {
+          namaUjian: initial.nama,
+          mapelId: initial.mapelId,
+          jenisUjian: initial.jenis as string,
+          kelasIds: initial.kelasIds,
+          tahunAjaran: initial.tahunAjaran,
+          semester: initial.semester,
+          durasiMenit: initial.durasiMenit,
+          kkm: initial.kkm,
+          acakSoal: initial.acakSoal,
+          tampilkanHasil: initial.tampilkanHasil,
+        }
+      : {
+          namaUjian: "",
+          mapelId: "",
+          jenisUjian: "UTS" as string,
+          kelasIds: [] as string[],
+          tahunAjaran: "",
+          semester: "",
+          durasiMenit: 90,
+          kkm: 75,
+          acakSoal: true,
+          tampilkanHasil: false,
+        }
+  )
+
+  const [soalList, setSoalList] = React.useState<SoalItem[]>(() => {
+    if (!initial) return [createSoal("Pilihan Ganda", "s-1")]
+
+    const list = soalFromDb(initial.soal)
+    // Ujian lama tanpa soal: sediakan satu soal kosong (dirender di client saja, setelah data siap)
+    return list.length > 0 ? list : [createSoal("Pilihan Ganda", `s-${Date.now()}`)]
+  })
+
+  const [openItems, setOpenItems] = React.useState<string[]>(() =>
+    soalList.slice(0, 1).map((s) => s.id)
+  )
   const [errors, setErrors] = React.useState<Record<string, string>>({})
 
-  // Mode edit: sudah terisi dari server. Mode baru: default periode dan mapel sudah diterapkan.
-  const [hydrated, setHydrated] = React.useState(false)
+  // Ujian baru: default mapel dan periode sudah diterapkan
   const defaultsApplied = React.useRef(false)
 
   // ---------- DATA ----------
   const { data: referensi, error: referensiError } = useQuery<ReferensiUjian>({
     queryKey: [...UJIAN_KEY, "referensi"],
     queryFn: () => fetchJson<ReferensiUjian>("/api/soal-ujian/referensi"),
-  })
-
-  const {
-    data: detail,
-    isLoading: detailLoading,
-    error: detailError,
-  } = useQuery<UjianDetail>({
-    queryKey: [...UJIAN_KEY, ujianId],
-    queryFn: () => fetchJson<UjianDetail>(`/api/soal-ujian/${ujianId}`),
-    enabled: isEdit,
-    staleTime: Infinity,
   })
 
   const saveMutation = useMutation({
@@ -267,30 +338,6 @@ function UjianForm() {
       semester: periode?.semester ?? "",
     }))
   }, [referensi, isEdit])
-
-  // Mode edit: isi state dari server satu kali saja, supaya refetch tidak menimpa editan
-  React.useEffect(() => {
-    if (!detail || hydrated) return
-    setHydrated(true)
-
-    setInfoUjian({
-      namaUjian: detail.nama,
-      mapelId: detail.mapelId,
-      jenisUjian: detail.jenis,
-      kelasIds: detail.kelasIds,
-      tahunAjaran: detail.tahunAjaran,
-      semester: detail.semester,
-      durasiMenit: detail.durasiMenit,
-      kkm: detail.kkm,
-      acakSoal: detail.acakSoal,
-      tampilkanHasil: detail.tampilkanHasil,
-    })
-
-    const list = soalFromDb(detail.soal)
-    const finalList = list.length > 0 ? list : [createSoal("Pilihan Ganda", `s-${Date.now()}`)]
-    setSoalList(finalList)
-    setOpenItems([finalList[0].id])
-  }, [detail, hydrated])
 
   // ---------- OPSI PILIHAN DARI MASTER DATA ----------
   // Mapel/kelas nonaktif tetap muncul kalau sudah terpilih (saat edit ujian lama)
@@ -448,25 +495,6 @@ function UjianForm() {
       })
     )
     window.open("/dashboard/soal-ujian/create/preview-soal", "_blank")
-  }
-
-  if (isEdit && detailLoading && !hydrated) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Memuat ujian...
-      </div>
-    )
-  }
-
-  if (isEdit && detailError && !hydrated) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-24 text-sm text-muted-foreground">
-        <p>Gagal memuat ujian: {getErrorMessage(detailError)}</p>
-        <Link href={LIST_PATH} className="underline underline-offset-4">
-          Kembali ke daftar ujian
-        </Link>
-      </div>
-    )
   }
 
   const isSaving = saveMutation.isPending
@@ -668,7 +696,7 @@ function UjianForm() {
           {errors["soalList"] && <p className="text-xs text-destructive">{errors["soalList"]}</p>}
 
           <div id="tour-daftar-soal" className="max-h-[calc(100vh-180px)] overflow-y-auto pr-2 space-y-4">
-           <Accordion className="space-y-4" value={openItems} onValueChange={setOpenItems}>
+            <Accordion className="space-y-4" value={openItems} onValueChange={setOpenItems}>
               {soalList.map((soal, sIdx) => (
                 <SoalItemCard
                   key={soal.id}

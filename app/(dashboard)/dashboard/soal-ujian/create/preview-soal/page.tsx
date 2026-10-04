@@ -1,14 +1,26 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
-import { ArrowLeft, Timer, CheckCircle2, CircleDashed, ChevronLeft, ChevronRight } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
+import {
+  ArrowLeft,
+  Timer,
+  CheckCircle2,
+  CircleDashed,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
+import type { ReferensiUjian, UjianDetail } from "@/types/soal-ujian"
 
+// --- BENTUK DATA YANG DITAMPILKAN (sama untuk sumber database dan form) ---
 interface OpsiJawaban {
   id: string
   teks: string
@@ -17,9 +29,10 @@ interface OpsiJawaban {
 
 interface SoalItem {
   id: string
-  pertanyaan: string
+  pertanyaan: string // HTML dari editor teks
   tipe: "Pilihan Ganda" | "Essai"
   bobot: number
+  isMultipleChoice: boolean
   opsi: OpsiJawaban[]
 }
 
@@ -27,7 +40,7 @@ interface PreviewData {
   namaUjian: string
   mataPelajaran: string
   jenisUjian: string
-  kelas: string
+  kelas: string[]
   tahunAjaran: string
   semester: string
   durasiMenit: number
@@ -35,70 +48,251 @@ interface PreviewData {
   soalList: SoalItem[]
 }
 
-export default function PreviewUjianPage() {
+const UJIAN_KEY = ["soal-ujian"]
+const LIST_PATH = "/dashboard/soal-ujian"
+
+// Gaya tampilan HTML dari editor teks
+const RICH_CLASS =
+  "[&_p]:m-0 [&_p]:min-h-[1em] [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_th]:border [&_td]:p-2 [&_th]:p-2 [&_th]:bg-muted/40"
+
+const stripHtml = (html: string) =>
+  html?.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim() || ""
+
+// Ada isi kalau ada teks atau minimal satu gambar
+const hasContent = (html: string) => stripHtml(html).length > 0 || /<img\b/i.test(html ?? "")
+
+// --- SUMBER 1: UJIAN TERSIMPAN (database) ---
+function fromDetail(detail: UjianDetail, referensi: ReferensiUjian): PreviewData {
+  return {
+    namaUjian: detail.nama,
+    mataPelajaran: referensi.mapel.find((m) => m.id === detail.mapelId)?.nama ?? "-",
+    jenisUjian: detail.jenis,
+    kelas: referensi.kelas
+      .filter((k) => detail.kelasIds.includes(k.id))
+      .map((k) => k.namaKelas),
+    tahunAjaran: detail.tahunAjaran,
+    semester: detail.semester,
+    durasiMenit: detail.durasiMenit,
+    kkm: detail.kkm,
+    soalList: [...detail.soal]
+      .sort((a, b) => a.seq - b.seq)
+      .map(
+        (s): SoalItem => ({
+          id: s.id,
+          pertanyaan: s.pertanyaan,
+          tipe: s.tipe === "PG" ? "Pilihan Ganda" : "Essai",
+          bobot: s.bobot,
+          isMultipleChoice: !!s.multiJawaban,
+          opsi: [...(s.opsi ?? [])]
+            .sort((a, b) => a.seq - b.seq)
+            .map((o) => ({ id: o.id, teks: o.teks, isBenar: o.benar })),
+        })
+      ),
+  }
+}
+
+// --- SUMBER 2: FORM YANG BELUM DISIMPAN (sessionStorage) ---
+interface SessionSoal {
+  id: string
+  pertanyaan?: string
+  tipe: "Pilihan Ganda" | "Essai"
+  bobot?: number
+  isMultipleChoice?: boolean
+  opsi?: { id: number | string; teks?: string; isBenar?: boolean }[]
+}
+
+interface SessionData {
+  namaUjian?: string
+  mataPelajaran?: string
+  jenisUjian?: string
+  targetKelas?: string[]
+  tahunAjaran?: string
+  semester?: string
+  durasiMenit?: number
+  kkm?: number
+  soalList?: SessionSoal[]
+}
+
+function fromSession(): PreviewData | null {
+  const raw = sessionStorage.getItem("previewUjianData")
+  if (!raw) return null
+
+  try {
+    const d = JSON.parse(raw) as SessionData
+
+    return {
+      namaUjian: d.namaUjian ?? "",
+      mataPelajaran: d.mataPelajaran || "-",
+      jenisUjian: d.jenisUjian ?? "-",
+      kelas: d.targetKelas ?? [],
+      tahunAjaran: d.tahunAjaran ?? "-",
+      semester: d.semester ?? "-",
+      durasiMenit: d.durasiMenit || 90,
+      kkm: d.kkm ?? 0,
+      soalList: (d.soalList ?? []).map(
+        (s): SoalItem => ({
+          id: s.id,
+          pertanyaan: s.pertanyaan ?? "",
+          tipe: s.tipe,
+          bobot: s.bobot ?? 0,
+          isMultipleChoice: !!s.isMultipleChoice,
+          opsi: (s.opsi ?? []).map((o) => ({
+            id: String(o.id),
+            teks: o.teks ?? "",
+            isBenar: !!o.isBenar,
+          })),
+        })
+      ),
+    }
+  } catch (err) {
+    console.error("Gagal membaca data preview:", err)
+    return null
+  }
+}
+
+// Soal dianggap terisi kalau pertanyaan ada, dan (untuk PG) semua opsi terisi serta ada kunci jawaban.
+// Sama dengan aturan saat Terbitkan.
+const isSoalTerisi = (soal: SoalItem) => {
+  if (!hasContent(soal.pertanyaan)) return false
+  if (soal.tipe === "Pilihan Ganda") {
+    return (
+      soal.opsi.length > 0 &&
+      soal.opsi.every((o) => o.teks.trim() !== "") &&
+      soal.opsi.some((o) => o.isBenar)
+    )
+  }
+  return true
+}
+
+const formatTime = (seconds: number) => {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+
+  if (h > 0) {
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+  }
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+}
+
+// Halaman ini sering dibuka di tab baru, jadi "kembali" menutup tab kalau tidak ada riwayat
+function useGoBack() {
   const router = useRouter()
-  const [data, setData] = React.useState<PreviewData | null>(null)
+
+  return React.useCallback(() => {
+    if (window.history.length > 1) {
+      router.back()
+    } else {
+      window.close()
+    }
+  }, [router])
+}
+
+// Suspense wajib karena PreviewRoot memakai useSearchParams
+export default function PreviewUjianPage() {
+  return (
+    <React.Suspense fallback={<LoadingState text="Memuat preview..." />}>
+      <PreviewRoot />
+    </React.Suspense>
+  )
+}
+
+function LoadingState({ text }: { text: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 min-h-[60vh] text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" /> {text}
+    </div>
+  )
+}
+
+function EmptyState({ message }: { message: string }) {
+  const goBack = useGoBack()
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <p className="text-muted-foreground">{message}</p>
+      <Button variant="outline" onClick={goBack}>
+        <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
+      </Button>
+    </div>
+  )
+}
+
+// Menentukan sumber data: ada ?id=... berarti ujian tersimpan, tanpa id berarti data dari form
+function PreviewRoot() {
+  const searchParams = useSearchParams()
+  const ujianId = searchParams.get("id")
+
+  if (ujianId) return <SavedPreview key={ujianId} ujianId={ujianId} />
+  return <DraftPreview />
+}
+
+// Preview ujian yang sudah tersimpan
+function SavedPreview({ ujianId }: { ujianId: string }) {
+  const {
+    data: detail,
+    isLoading: detailLoading,
+    error: detailError,
+  } = useQuery<UjianDetail>({
+    queryKey: [...UJIAN_KEY, "preview", ujianId],
+    queryFn: () => fetchJson<UjianDetail>(`/api/soal-ujian/${ujianId}`),
+    // Selalu ambil data segar, supaya preview sama dengan yang tersimpan
+    gcTime: 0,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  })
+
+  // Key yang sama dengan halaman lain, jadi cache-nya dipakai bersama
+  const {
+    data: referensi,
+    isLoading: referensiLoading,
+    error: referensiError,
+  } = useQuery<ReferensiUjian>({
+    queryKey: [...UJIAN_KEY, "referensi"],
+    queryFn: () => fetchJson<ReferensiUjian>("/api/soal-ujian/referensi"),
+  })
+
+  if (detailLoading || referensiLoading) return <LoadingState text="Memuat ujian..." />
+
+  const error = detailError ?? referensiError
+  if (error) return <EmptyState message={`Gagal memuat ujian: ${getErrorMessage(error)}`} />
+  if (!detail || !referensi) return <EmptyState message="Ujian tidak ditemukan." />
+
+  return <PreviewView data={fromDetail(detail, referensi)} />
+}
+
+// Preview dari form yang belum disimpan (data dititipkan lewat sessionStorage)
+function DraftPreview() {
+  // undefined = belum dibaca (sessionStorage hanya ada di browser), null = tidak ada data
+  const [data, setData] = React.useState<PreviewData | null | undefined>(undefined)
+
+  React.useEffect(() => {
+    setData(fromSession())
+  }, [])
+
+  if (data === undefined) return <LoadingState text="Memuat preview..." />
+  if (data === null) return <EmptyState message="Tidak ada data preview yang ditemukan." />
+
+  return <PreviewView data={data} />
+}
+
+// Tampilan preview. Dibuat setelah data siap, jadi state awal (timer) langsung benar.
+function PreviewView({ data }: { data: PreviewData }) {
+  const goBack = useGoBack()
 
   // State Indeks Soal Aktif
   const [currentIndex, setCurrentIndex] = React.useState<number>(0)
 
   // State Simulasi Timer
-  const [timeLeft, setTimeLeft] = React.useState<number>(0)
+  const [timeLeft, setTimeLeft] = React.useState<number>(() => data.durasiMenit * 60)
 
+  // Satu interval selama halaman terbuka (tidak dibuat ulang tiap detik)
   React.useEffect(() => {
-    const rawData = sessionStorage.getItem("previewUjianData")
-    if (rawData) {
-      try {
-        const parsed = JSON.parse(rawData) as PreviewData
-        setData(parsed)
-        setTimeLeft((parsed.durasiMenit || 90) * 60)
-      } catch (err) {
-        console.error("Gagal membaca data preview:", err)
-      }
-    }
-  }, [])
-
-  // Effect Countdown Timer
-  React.useEffect(() => {
-    if (timeLeft <= 0) return
     const interval = setInterval(() => {
       setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0))
     }, 1000)
     return () => clearInterval(interval)
-  }, [timeLeft])
-
-  const formatTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600)
-    const m = Math.floor((seconds % 3600) / 60)
-    const s = seconds % 60
-
-    if (h > 0) {
-      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-    }
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-  }
-
-  // Helper Cek apakah soal sudah terisi valid
-  const isSoalTerisi = (soal: SoalItem) => {
-    if (!soal.pertanyaan || soal.pertanyaan.trim() === "") return false
-    if (soal.tipe === "Pilihan Ganda") {
-      const adaTeksOpsi = soal.opsi.some((o) => o.teks && o.teks.trim() !== "")
-      const adaKunci = soal.opsi.some((o) => o.isBenar)
-      return adaTeksOpsi && adaKunci
-    }
-    return true
-  }
-
-  if (!data) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-muted-foreground">Tidak ada data preview yang ditemukan.</p>
-        <Button variant="outline" onClick={() => router.back()}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Kembali Ke Form Ujian
-        </Button>
-      </div>
-    )
-  }
+  }, [])
 
   const totalSoal = data.soalList.length
   const totalTerisi = data.soalList.filter(isSoalTerisi).length
@@ -106,27 +300,31 @@ export default function PreviewUjianPage() {
   const currentTerisi = currentSoal ? isSoalTerisi(currentSoal) : false
 
   return (
-    /* Mengubah max-w-8xl/max-w-5xl menjadi w-full agar layout memenuhi lebar layar */
     <div className="w-full px-4 sm:px-6 lg:px-8 space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-4">
           <div className="border rounded-lg bg-card px-6 py-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4">
-              <div>
-                <h1 className="text-xl font-bold">{data.namaUjian || "Nama Ujian Belum Diisi"}</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Mata Pelajaran: <span className="font-semibold text-foreground">{data.mataPelajaran}</span>
-                </p>
+              <div className="flex items-start gap-3">
+                <Button size="icon" variant="outline" onClick={goBack} title="Kembali">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <h1 className="text-xl font-bold">{data.namaUjian || "Nama Ujian Belum Diisi"}</h1>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Mata Pelajaran: <span className="font-semibold text-foreground">{data.mataPelajaran}</span>
+                  </p>
+                </div>
               </div>
               <Badge variant="outline" className="text-sm px-3 py-1 w-fit">
                 {data.jenisUjian}
               </Badge>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm pt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm pt-4">
               <div>
                 <span className="text-muted-foreground block text-xs">Target Kelas</span>
-                <span className="font-semibold">{data.kelas}</span>
+                <span className="font-semibold">{data.kelas.length ? data.kelas.join(", ") : "-"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground block text-xs">Tahun Ajaran</span>
@@ -144,7 +342,7 @@ export default function PreviewUjianPage() {
           </div>
 
           {/* Single Card Soal Aktif */}
-          {currentSoal && (
+          {currentSoal ? (
             <div className="border rounded-lg bg-card p-6 space-y-6 shadow-sm">
               <div className="flex items-center justify-between border-b pb-3">
                 <div className="flex items-center gap-2">
@@ -163,15 +361,26 @@ export default function PreviewUjianPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">{currentSoal.tipe}</Badge>
+                  {currentSoal.tipe === "Pilihan Ganda" && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {currentSoal.isMultipleChoice ? "Jawaban Banyak" : "1 Jawaban"}
+                    </Badge>
+                  )}
                   <Badge variant="outline">Bobot: {currentSoal.bobot}</Badge>
                 </div>
               </div>
 
-              <p className="text-base font-medium leading-relaxed whitespace-pre-wrap min-h-[60px]">
-                {currentSoal.pertanyaan || (
-                  <span className="italic text-muted-foreground">(Pertanyaan belum diisi)</span>
-                )}
-              </p>
+              {/* Pertanyaan: HTML dari editor teks */}
+              {hasContent(currentSoal.pertanyaan) ? (
+                <div
+                  className={`text-base font-medium leading-relaxed min-h-[60px] ${RICH_CLASS}`}
+                  dangerouslySetInnerHTML={{ __html: currentSoal.pertanyaan }}
+                />
+              ) : (
+                <p className="text-base leading-relaxed min-h-[60px] italic text-muted-foreground">
+                  (Pertanyaan belum diisi)
+                </p>
+              )}
 
               {/* Opsi Pilihan Ganda */}
               {currentSoal.tipe === "Pilihan Ganda" && (
@@ -242,6 +451,10 @@ export default function PreviewUjianPage() {
                   Selanjutnya <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
+            </div>
+          ) : (
+            <div className="border rounded-lg bg-card p-10 text-center text-sm text-muted-foreground">
+              Ujian ini belum memiliki butir soal.
             </div>
           )}
         </div>
