@@ -395,7 +395,6 @@ export default function SoalUjianPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[50px]">No</TableHead>
               {COLUMNS.map((col) => (
                 <TableHead key={col.key}>
                   <Button variant="ghost" size="sm" onClick={() => handleSort(col.key)} className="-ml-3 h-8">
@@ -432,7 +431,6 @@ export default function SoalUjianPage() {
 
                 return (
                   <TableRow key={item.id}>
-                    <TableCell>{(currentPage - 1) * pageSize + i + 1}</TableCell>
                     <TableCell className="font-semibold">{item.nama}</TableCell>
                     <TableCell>{item.mapel}</TableCell>
                     <TableCell><Badge variant="outline">{item.jenis}</Badge></TableCell>

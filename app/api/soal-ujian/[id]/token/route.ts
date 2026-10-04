@@ -12,19 +12,25 @@ export async function GET(_request: Request, { params }: Context) {
     return handleError(err)
   }
 }
-
-// Body: { "open": true } untuk membuka, { "open": false } untuk menutup
 export async function PATCH(request: Request, { params }: Context) {
   try {
     const admin = await requireAdmin()
     const { id } = await params
-    const body = await readJson<{ open?: unknown }>(request)
+    const body = await readJson<{ open?: unknown; expiresInMinutes?: unknown }>(request)
 
     if (typeof body.open !== "boolean") {
       throw new ApiError(400, "Field open harus true atau false")
     }
 
-    return ok(await tokenUjianService.setOpen(id, body.open, admin.id))
+    let expiresInMinutes: number | null = null
+    if (body.expiresInMinutes !== undefined && body.expiresInMinutes !== null) {
+      if (typeof body.expiresInMinutes !== "number") {
+        throw new ApiError(400, "Field expiresInMinutes harus berupa angka")
+      }
+      expiresInMinutes = body.expiresInMinutes
+    }
+
+    return ok(await tokenUjianService.setOpen(id, body.open, admin.id, expiresInMinutes))
   } catch (err) {
     return handleError(err)
   }
