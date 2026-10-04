@@ -20,8 +20,13 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   kelas: "Nama kelas sudah dipakai",
   templaterapor: "Nama template sudah dipakai",
   soalujian: "Nama ujian sudah dipakai pada tahun ajaran tersebut",
+  core_menu_name_main: "Nama menu utama sudah dipakai",
+  core_menu_name_sub: "Nama sub menu sudah dipakai di menu induk ini",
+  core_menu_url: "URL rute sudah dipakai menu lain",
+  core_menufunction: "Kode button sudah dipakai di menu ini",
 }
 
+// Hanya user ADMIN yang aktif yang boleh lewat
 export async function requireAdmin() {
   const session = await getSession()
   if (!session) {
@@ -68,6 +73,7 @@ export function handleError(err: unknown) {
     )
   }
 
+  // Foreign key: data referensi tidak ada atau masih dipakai
   if (e?.code === "23503") {
     return NextResponse.json(
       {
@@ -78,6 +84,7 @@ export function handleError(err: unknown) {
     )
   }
 
+  // ID di URL bukan UUID yang valid
   if (e?.code === "22P02") {
     return NextResponse.json(
       { error: "Data tidak ditemukan" },

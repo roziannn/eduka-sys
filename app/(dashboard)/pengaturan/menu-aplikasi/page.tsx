@@ -1,17 +1,21 @@
 "use client"
 
 import * as React from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import {
   Plus,
   Pencil,
   FolderPlus,
   ChevronRight,
   ChevronDown,
-  LayoutGrid,
   Search,
   Layers,
   MousePointerClick,
+  Trash2,
+  Check,
   X,
+  Loader2,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -27,85 +31,76 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
+import { isMenuIconName, MENU_ICON_NAMES } from "@/lib/menu-icon-names"
+import { getMenuIcon, MENU_ICONS } from "@/lib/menu-icons"
 
+// Bentuk data dari GET /api/menu
 interface SubMenuItem {
   id: string
   namaSubMenu: string
   url: string
   urutan: number
   isAktif: boolean
-  buttons: string[]
+  buttons: { id: string; code: string }[]
 }
 
 interface MenuItem {
   id: string
   namaMenu: string
-  iconName: string
+  iconName: string | null
   url: string
   urutan: number
   isAktif: boolean
   subMenus: SubMenuItem[]
 }
 
-const initialMenuItems: MenuItem[] = [
-  {
-    id: "m-1",
-    namaMenu: "Dashboard",
-    iconName: "LayoutDashboard",
-    url: "/dashboard",
-    urutan: 1,
-    isAktif: true,
-    subMenus: [],
-  },
-  {
-    id: "m-2",
-    namaMenu: "Ujian dan Kuis",
-    iconName: "FileText",
-    url: "#",
-    urutan: 2,
-    isAktif: true,
-    subMenus: [
-      { id: "sm-1", namaSubMenu: "Soal Ujian", url: "/dashboard/soal-ujian", urutan: 1, isAktif: true, buttons: ["btn-add", "btn-edit", "btn-delete"] },
-      { id: "sm-2", namaSubMenu: "Soal Kuis", url: "/dashboard/soal-kuis", urutan: 2, isAktif: true, buttons: ["btn-add", "btn-publish"] },
-      { id: "sm-3", namaSubMenu: "Hasil Ujian", url: "/dashboard/hasil-ujian", urutan: 3, isAktif: true, buttons: ["btn-print", "btn-retake"] },
-    ],
-  },
-  {
-    id: "m-3",
-    namaMenu: "Pengaturan",
-    iconName: "Sliders",
-    url: "#",
-    urutan: 3,
-    isAktif: true,
-    subMenus: [
-      { id: "sm-5", namaSubMenu: "Menu Aplikasi", url: "/dashboard/pengaturan/menu-aplikasi", urutan: 1, isAktif: true, buttons: ["btn-save", "btn-add-sub"] },
-    ],
-  },
-]
+// Button di dialog sub menu. id null = button baru yang belum tersimpan.
+interface ButtonDraft {
+  id: string | null
+  code: string
+}
+
+const MENU_KEY = ["menu"]
+
+const BUTTON_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+const MAX_BUTTON_CODE = 50
+
+// Sama dengan aturan di server: huruf kecil, spasi jadi tanda minus
+const normalizeCode = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, "-")
+
+// Mengembalikan pesan error, atau null kalau kode valid. `others` = kode button lain di daftar.
+const validateCode = (code: string, others: string[]) => {
+  if (!code) return "Kode button wajib diisi."
+  if (code.length > MAX_BUTTON_CODE) return `Kode button maksimal ${MAX_BUTTON_CODE} karakter.`
+  if (!BUTTON_RE.test(code)) return "Pakai huruf kecil, angka, dan tanda minus. Contoh: btn-save."
+  if (others.includes(code)) return `Button "${code}" sudah ada di daftar.`
+  return null
+}
 
 export default function MenuAplikasiPage() {
-  const [menus, setMenus] = React.useState<MenuItem[]>(initialMenuItems)
-  const [expandedRow, setExpandedRow] = React.useState<Record<string, boolean>>({
-    "m-2": true,
-    "m-3": true,
-  })
+  const queryClient = useQueryClient()
+
+  const [expandedRow, setExpandedRow] = React.useState<Record<string, boolean>>({})
   const [search, setSearch] = React.useState("")
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null)
 
   // Modal States
   const [openMenuModal, setOpenMenuModal] = React.useState(false)
   const [openSubMenuModal, setOpenSubMenuModal] = React.useState(false)
-  
+
   // Target Parent Menu State
   const [activeParentMenu, setActiveParentMenu] = React.useState<MenuItem | null>(null)
-  
+
   // Editing States
   const [editingMenu, setEditingMenu] = React.useState<MenuItem | null>(null)
   const [editingSubMenu, setEditingSubMenu] = React.useState<SubMenuItem | null>(null)
 
-  // Forms
+  // Forms. iconName "" = tanpa ikon.
   const [formMenu, setFormMenu] = React.useState({
     namaMenu: "",
     url: "",
+    iconName: "",
   })
 
   const [formSubMenu, setFormSubMenu] = React.useState({
@@ -114,8 +109,51 @@ export default function MenuAplikasiPage() {
   })
 
   // State List Button Action di Sub Menu
-  const [buttonsList, setButtonsList] = React.useState<string[]>([])
+  const [buttonsList, setButtonsList] = React.useState<ButtonDraft[]>([])
   const [newButtonInput, setNewButtonInput] = React.useState("")
+  const [buttonError, setButtonError] = React.useState<string | null>(null)
+  // Button yang sedang diedit di tempat (indeks di buttonsList), null = tidak ada
+  const [editingButtonIndex, setEditingButtonIndex] = React.useState<number | null>(null)
+  const [editingButtonValue, setEditingButtonValue] = React.useState("")
+
+  // ---------- DATA ----------
+  const {
+    data: menus = [],
+    isLoading,
+    error: menusError,
+  } = useQuery<MenuItem[]>({
+    queryKey: MENU_KEY,
+    queryFn: () => fetchJson<MenuItem[]>("/api/menu"),
+  })
+
+  React.useEffect(() => {
+    if (menusError) {
+      toast.error(`Gagal memuat data menu: ${getErrorMessage(menusError)}`)
+    }
+  }, [menusError])
+
+  // Saat pertama dimuat, semua menu utama yang punya sub menu dibuka
+  const expandedInitialized = React.useRef(false)
+  React.useEffect(() => {
+    if (expandedInitialized.current || menus.length === 0) return
+    expandedInitialized.current = true
+
+    setExpandedRow(
+      Object.fromEntries(menus.filter((m) => m.subMenus.length > 0).map((m) => [m.id, true]))
+    )
+  }, [menus])
+
+  // Satu mutation untuk menu utama dan sub menu (bedanya di isi body)
+  const saveMutation = useMutation({
+    mutationFn: (input: { id?: string; body: Record<string, unknown> }) =>
+      fetchJson(input.id ? `/api/menu/${input.id}` : "/api/menu", {
+        method: input.id ? "PUT" : "POST",
+        body: input.body,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: MENU_KEY }),
+  })
+
+  const isSaving = saveMutation.isPending
 
   const toggleExpand = (id: string) => {
     setExpandedRow((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -124,131 +162,201 @@ export default function MenuAplikasiPage() {
   // --- HANDLERS MENU UTAMA ---
   const handleOpenAddMenu = () => {
     setEditingMenu(null)
-    setFormMenu({ namaMenu: "", url: "" })
+    setErrorMsg(null)
+    setFormMenu({ namaMenu: "", url: "", iconName: "" })
     setOpenMenuModal(true)
   }
 
   const handleOpenEditMenu = (menu: MenuItem) => {
     setEditingMenu(menu)
-    setFormMenu({ namaMenu: menu.namaMenu, url: menu.url })
+    setErrorMsg(null)
+    setFormMenu({
+      namaMenu: menu.namaMenu,
+      url: menu.url,
+      // Ikon di luar daftar yang tersedia dianggap kosong (akan dihapus kalau disimpan)
+      iconName: isMenuIconName(menu.iconName) ? menu.iconName : "",
+    })
     setOpenMenuModal(true)
   }
 
   const handleSaveMenu = () => {
-    if (!formMenu.namaMenu) return
-
-    if (editingMenu) {
-      setMenus((prev) =>
-        prev.map((item) =>
-          item.id === editingMenu.id
-            ? { ...item, namaMenu: formMenu.namaMenu, url: formMenu.url }
-            : item
-        )
-      )
-    } else {
-      const newMenu: MenuItem = {
-        id: `m-${Date.now()}`,
-        namaMenu: formMenu.namaMenu,
-        iconName: "Folder",
-        url: formMenu.url || "#",
-        urutan: menus.length + 1,
-        isAktif: true,
-        subMenus: [],
-      }
-      setMenus((prev) => [...prev, newMenu])
+    const nama = formMenu.namaMenu.trim()
+    if (!nama) {
+      setErrorMsg("Nama menu utama wajib diisi.")
+      return
     }
-    setOpenMenuModal(false)
+    setErrorMsg(null)
+
+    const isEdit = Boolean(editingMenu)
+
+    // Button tidak dikirim untuk menu utama, jadi tidak ikut diubah
+    saveMutation.mutate(
+      {
+        id: editingMenu?.id,
+        body: { nama, url: formMenu.url, icon: formMenu.iconName || null },
+      },
+      {
+        onSuccess: () => {
+          toast.success(
+            isEdit ? "Menu utama berhasil diperbarui!" : `Menu "${nama}" berhasil ditambahkan!`
+          )
+          setOpenMenuModal(false)
+        },
+        onError: (err) => {
+          const message = getErrorMessage(err)
+          setErrorMsg(message)
+          toast.error(`${isEdit ? "Gagal memperbarui" : "Gagal menambah"} menu: ${message}`)
+        },
+      }
+    )
   }
 
   // --- HANDLERS SUB MENU ---
+  const resetButtonEditor = () => {
+    setNewButtonInput("")
+    setButtonError(null)
+    setEditingButtonIndex(null)
+    setEditingButtonValue("")
+  }
+
   const handleOpenAddSubMenu = (parentMenu: MenuItem) => {
     setEditingSubMenu(null)
     setActiveParentMenu(parentMenu)
+    setErrorMsg(null)
     setFormSubMenu({ namaSubMenu: "", url: "" })
     setButtonsList([])
-    setNewButtonInput("")
+    resetButtonEditor()
     setOpenSubMenuModal(true)
   }
 
   const handleOpenEditSubMenu = (parentMenu: MenuItem, subMenu: SubMenuItem) => {
     setEditingSubMenu(subMenu)
     setActiveParentMenu(parentMenu)
+    setErrorMsg(null)
     setFormSubMenu({ namaSubMenu: subMenu.namaSubMenu, url: subMenu.url })
-    setButtonsList(subMenu.buttons || [])
-    setNewButtonInput("")
+    setButtonsList(subMenu.buttons.map((b) => ({ id: b.id, code: b.code })))
+    resetButtonEditor()
     setOpenSubMenuModal(true)
   }
 
-  // Tag Button Handlers
-  const handleAddButtonTag = () => {
+  // Tambah button
+  const handleAddButton = () => {
     if (!newButtonInput.trim()) return
-    const formatted = newButtonInput.trim().toLowerCase().replace(/\s+/g, "-")
-    if (!buttonsList.includes(formatted)) {
-      setButtonsList([...buttonsList, formatted])
+
+    const code = normalizeCode(newButtonInput)
+    const error = validateCode(code, buttonsList.map((b) => b.code))
+    if (error) {
+      setButtonError(error)
+      return
     }
+
+    setButtonsList((prev) => [...prev, { id: null, code }])
     setNewButtonInput("")
+    setButtonError(null)
   }
 
-  const handleRemoveButtonTag = (btnName: string) => {
-    setButtonsList(buttonsList.filter((b) => b !== btnName))
+  // Edit button di tempat. id button tetap, hanya kodenya yang berubah.
+  const handleStartEditButton = (index: number) => {
+    setEditingButtonIndex(index)
+    setEditingButtonValue(buttonsList[index].code)
+    setButtonError(null)
+  }
+
+  const handleConfirmEditButton = () => {
+    if (editingButtonIndex === null) return
+
+    const code = normalizeCode(editingButtonValue)
+    const others = buttonsList.filter((_, i) => i !== editingButtonIndex).map((b) => b.code)
+    const error = validateCode(code, others)
+    if (error) {
+      setButtonError(error)
+      return
+    }
+
+    setButtonsList((prev) =>
+      prev.map((b, i) => (i === editingButtonIndex ? { ...b, code } : b))
+    )
+    setEditingButtonIndex(null)
+    setEditingButtonValue("")
+    setButtonError(null)
+  }
+
+  const handleCancelEditButton = () => {
+    setEditingButtonIndex(null)
+    setEditingButtonValue("")
+    setButtonError(null)
+  }
+
+  // Hapus button dari daftar. Baru berlaku saat sub menu disimpan.
+  const handleRemoveButton = (index: number) => {
+    setButtonsList((prev) => prev.filter((_, i) => i !== index))
+    setButtonError(null)
   }
 
   const handleSaveSubMenu = () => {
-    if (!formSubMenu.namaSubMenu || !activeParentMenu) return
+    if (!activeParentMenu) return
 
-    if (editingSubMenu) {
-      setMenus((prev) =>
-        prev.map((menu) => {
-          if (menu.id === activeParentMenu.id) {
-            return {
-              ...menu,
-              subMenus: menu.subMenus.map((sub) =>
-                sub.id === editingSubMenu.id
-                  ? {
-                      ...sub,
-                      namaSubMenu: formSubMenu.namaSubMenu,
-                      url: formSubMenu.url,
-                      buttons: buttonsList,
-                    }
-                  : sub
-              ),
-            }
-          }
-          return menu
-        })
-      )
-    } else {
-      setMenus((prev) =>
-        prev.map((menu) => {
-          if (menu.id === activeParentMenu.id) {
-            const newSub: SubMenuItem = {
-              id: `sm-${Date.now()}`,
-              namaSubMenu: formSubMenu.namaSubMenu,
-              url: formSubMenu.url,
-              urutan: menu.subMenus.length + 1,
-              isAktif: true,
-              buttons: buttonsList,
-            }
-            return {
-              ...menu,
-              subMenus: [...menu.subMenus, newSub],
-            }
-          }
-          return menu
-        })
-      )
-      setExpandedRow((prev) => ({ ...prev, [activeParentMenu.id]: true }))
+    const nama = formSubMenu.namaSubMenu.trim()
+    if (!nama) {
+      setErrorMsg("Nama sub menu wajib diisi.")
+      return
     }
-    setOpenSubMenuModal(false)
+    if (!formSubMenu.url.trim()) {
+      setErrorMsg("URL rute halaman wajib diisi.")
+      return
+    }
+    if (editingButtonIndex !== null) {
+      setErrorMsg("Selesaikan atau batalkan edit button terlebih dahulu.")
+      return
+    }
+    if (newButtonInput.trim()) {
+      setErrorMsg(
+        `Button "${newButtonInput.trim()}" belum ditambahkan. Klik Tambah atau kosongkan kolomnya.`
+      )
+      return
+    }
+    setErrorMsg(null)
+
+    const isEdit = Boolean(editingSubMenu)
+    const parent = activeParentMenu
+
+    saveMutation.mutate(
+      {
+        id: editingSubMenu?.id,
+        body: {
+          // Menu induk hanya dikirim saat membuat, tidak bisa dipindah saat edit
+          ...(isEdit ? {} : { parentId: parent.id }),
+          nama,
+          url: formSubMenu.url,
+          buttons: buttonsList.map(({ id, code }) => ({ id, code })),
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(
+            isEdit ? "Sub menu berhasil diperbarui!" : `Sub menu "${nama}" berhasil ditambahkan!`
+          )
+          if (!isEdit) setExpandedRow((prev) => ({ ...prev, [parent.id]: true }))
+          setOpenSubMenuModal(false)
+        },
+        onError: (err) => {
+          const message = getErrorMessage(err)
+          setErrorMsg(message)
+          toast.error(`${isEdit ? "Gagal memperbarui" : "Gagal menambah"} sub menu: ${message}`)
+        },
+      }
+    )
   }
 
   // Filter Search
   const filteredMenus = React.useMemo(() => {
-    if (!search) return menus
+    const keyword = search.trim().toLowerCase()
+    if (!keyword) return menus
+
     return menus.filter(
       (m) =>
-        m.namaMenu.toLowerCase().includes(search.toLowerCase()) ||
-        m.subMenus.some((s) => s.namaSubMenu.toLowerCase().includes(search.toLowerCase()))
+        m.namaMenu.toLowerCase().includes(keyword) ||
+        m.subMenus.some((s) => s.namaSubMenu.toLowerCase().includes(keyword))
     )
   }, [menus, search])
 
@@ -291,17 +399,27 @@ export default function MenuAplikasiPage() {
             <TableRow>
               <TableHead className="w-[40px]"></TableHead>
               <TableHead className="w-[70px]">No</TableHead>
-              <TableHead className="w-[240px]">Nama Menu / Sub Menu</TableHead>
+              <TableHead className="w-[240px]">Nama Menu</TableHead>
               <TableHead className="w-[200px]">URL Rute</TableHead>
               <TableHead>Fitur Button Action</TableHead>
               <TableHead className="text-right w-[100px]">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredMenus.length ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center">
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Memuat data...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : filteredMenus.length ? (
               filteredMenus.map((menu) => {
                 const isExpanded = expandedRow[menu.id]
                 const hasSub = menu.subMenus.length > 0
+                // Ikon yang dipilih, atau Layers kalau menu belum punya ikon
+                const MenuIcon = getMenuIcon(menu.iconName) ?? Layers
 
                 return (
                   <React.Fragment key={menu.id}>
@@ -323,16 +441,16 @@ export default function MenuAplikasiPage() {
                           </Button>
                         )}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{menu.urutan}</TableCell>
+                      <TableCell className="text-sm">{menu.urutan}</TableCell>
                       <TableCell className="font-semibold text-foreground">
                         <div className="flex items-center gap-2">
-                          <Layers className="h-4 w-4 text-primary" />
+                          <MenuIcon className="h-4 w-4 text-primary" />
                           <span>{menu.namaMenu}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{menu.url}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{menu.url}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-[11px] font-normal">
+                        <Badge variant="outline" className="text-xs font-normal">
                           {menu.subMenus.length} Sub Menu
                         </Badge>
                       </TableCell>
@@ -372,20 +490,20 @@ export default function MenuAplikasiPage() {
                               <span className="font-medium text-foreground">{sub.namaSubMenu}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="font-mono text-muted-foreground">{sub.url}</TableCell>
-                          
+                          <TableCell className="text-muted-foreground">{sub.url}</TableCell>
+
                           {/* LIST BADGE BUTTON ACTION */}
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
-                              {sub.buttons && sub.buttons.length > 0 ? (
-                                sub.buttons.map((btn, idx) => (
+                              {sub.buttons.length > 0 ? (
+                                sub.buttons.map((btn) => (
                                   <Badge
-                                    key={idx}
+                                    key={btn.id}
                                     variant="secondary"
                                     className="text-[10px] font-mono gap-1 bg-muted/80 text-foreground border"
                                   >
                                     <MousePointerClick className="h-2.5 w-2.5 text-primary" />
-                                    {btn}
+                                    {btn.code}
                                   </Badge>
                                 ))
                               ) : (
@@ -415,7 +533,9 @@ export default function MenuAplikasiPage() {
             ) : (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                  Data menu aplikasi tidak ditemukan.
+                  {menus.length === 0
+                    ? "Belum ada menu. Klik Tambah Menu Utama untuk memulai."
+                    : "Data menu aplikasi tidak ditemukan."}
                 </TableCell>
               </TableRow>
             )}
@@ -424,8 +544,14 @@ export default function MenuAplikasiPage() {
       </div>
 
       {/* DIALOG FORM MENU UTAMA */}
-      <Dialog open={openMenuModal} onOpenChange={setOpenMenuModal}>
-        <DialogContent className="sm:max-w-[420px]">
+      <Dialog
+        open={openMenuModal}
+        onOpenChange={(open) => {
+          // Dialog tidak bisa ditutup selagi menyimpan
+          if (!open && !isSaving) setOpenMenuModal(false)
+        }}
+      >
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle>{editingMenu ? "Edit Menu Utama" : "Tambah Menu Utama Baru"}</DialogTitle>
             <DialogDescription>
@@ -433,12 +559,20 @@ export default function MenuAplikasiPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {errorMsg && (
+            <div className="rounded-md bg-destructive/15 p-3 text-xs text-destructive font-medium text-center">
+              {errorMsg}
+            </div>
+          )}
+
           <div className="space-y-4 py-2 text-sm">
             <div className="space-y-1.5">
               <Label>Nama Menu Utama</Label>
               <Input
                 placeholder="Contoh: Pengaturan, Ujian dan Kuis"
                 value={formMenu.namaMenu}
+                maxLength={100}
+                disabled={isSaving}
                 onChange={(e) => setFormMenu({ ...formMenu, namaMenu: e.target.value })}
               />
             </div>
@@ -448,30 +582,57 @@ export default function MenuAplikasiPage() {
               <Input
                 placeholder="Isi '#' jika menu ini memiliki sub menu"
                 value={formMenu.url}
+                disabled={isSaving}
                 onChange={(e) => setFormMenu({ ...formMenu, url: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Ikon (Opsional)</Label>
+              <IconPicker
+                value={formMenu.iconName}
+                disabled={isSaving}
+                onChange={(iconName) => setFormMenu({ ...formMenu, iconName })}
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenMenuModal(false)}>
+            <Button variant="outline" onClick={() => setOpenMenuModal(false)} disabled={isSaving}>
               Batal
             </Button>
-            <Button onClick={handleSaveMenu}>Simpan Menu</Button>
+            <Button onClick={handleSaveMenu} disabled={isSaving}>
+              {isSaving ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</>
+              ) : (
+                "Simpan Menu"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* DIALOG FORM SUB MENU */}
-      <Dialog open={openSubMenuModal} onOpenChange={setOpenSubMenuModal}>
+      <Dialog
+        open={openSubMenuModal}
+        onOpenChange={(open) => {
+          if (!open && !isSaving) setOpenSubMenuModal(false)
+        }}
+      >
         <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>{editingSubMenu ? "Edit Sub Menu" : "Tambah Sub Menu"}</DialogTitle>
             <DialogDescription>
-              Menambahkan sub menu untuk menu induk:{" "}
+              {editingSubMenu ? "Mengubah sub menu dari menu induk: " : "Menambahkan sub menu untuk menu induk: "}
               <strong className="text-foreground font-semibold">{activeParentMenu?.namaMenu}</strong>
             </DialogDescription>
           </DialogHeader>
+
+          {errorMsg && (
+            <div className="rounded-md bg-destructive/15 p-3 text-xs text-destructive font-medium text-center">
+              {errorMsg}
+            </div>
+          )}
 
           <div className="space-y-4 py-2 text-sm">
             <div className="bg-muted/50 p-2.5 rounded-md border text-xs flex items-center justify-between">
@@ -484,6 +645,8 @@ export default function MenuAplikasiPage() {
               <Input
                 placeholder="Contoh: Menu Aplikasi, Soal Ujian"
                 value={formSubMenu.namaSubMenu}
+                maxLength={100}
+                disabled={isSaving}
                 onChange={(e) => setFormSubMenu({ ...formSubMenu, namaSubMenu: e.target.value })}
               />
             </div>
@@ -493,6 +656,7 @@ export default function MenuAplikasiPage() {
               <Input
                 placeholder="Contoh: /dashboard/pengaturan/menu-aplikasi"
                 value={formSubMenu.url}
+                disabled={isSaving}
                 onChange={(e) => setFormSubMenu({ ...formSubMenu, url: e.target.value })}
               />
             </div>
@@ -508,56 +672,210 @@ export default function MenuAplikasiPage() {
                 <Input
                   placeholder="Contoh: btn-save, btn-delete"
                   value={newButtonInput}
-                  onChange={(e) => setNewButtonInput(e.target.value)}
+                  disabled={isSaving || editingButtonIndex !== null}
+                  onChange={(e) => {
+                    setNewButtonInput(e.target.value)
+                    setButtonError(null)
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault()
-                      handleAddButtonTag()
+                      handleAddButton()
                     }
                   }}
                   className="font-mono text-xs"
                 />
-                <Button type="button" variant="secondary" onClick={handleAddButtonTag}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleAddButton}
+                  disabled={isSaving || editingButtonIndex !== null}
+                >
                   Tambah
                 </Button>
               </div>
 
-              {/* Tag Render Button List */}
-              <div className="flex flex-wrap gap-1.5 pt-1 min-h-[36px] bg-muted/20 p-2 rounded-md border">
-                {buttonsList.length > 0 ? (
-                  buttonsList.map((btn, i) => (
-                    <Badge
-                      key={i}
-                      variant="default"
-                      className="gap-1 font-mono text-[11px] bg-primary text-primary-foreground pr-1"
-                    >
-                      {btn}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveButtonTag(btn)}
-                        className="hover:bg-primary-foreground/20 rounded-full p-0.5"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-xs text-muted-foreground italic my-auto">
+              {buttonError && <p className="text-xs text-destructive">{buttonError}</p>}
+
+              {/* Daftar button: tiap baris bisa diedit atau dihapus */}
+              <div className="space-y-1.5 min-h-[44px] max-h-[200px] overflow-y-auto bg-muted/20 p-2 rounded-md border">
+                {buttonsList.length === 0 ? (
+                  <span className="block py-1 text-xs text-muted-foreground italic">
                     Belum ada button action ditambahkan.
                   </span>
+                ) : (
+                  buttonsList.map((btn, i) =>
+                    editingButtonIndex === i ? (
+                      <div key={btn.id ?? `baru-${i}`} className="flex items-center gap-1.5">
+                        <Input
+                          autoFocus
+                          value={editingButtonValue}
+                          disabled={isSaving}
+                          onChange={(e) => {
+                            setEditingButtonValue(e.target.value)
+                            setButtonError(null)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              handleConfirmEditButton()
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleCancelEditButton()
+                            }
+                          }}
+                          className="h-8 font-mono text-xs"
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-emerald-600"
+                          title="Simpan perubahan button"
+                          onClick={handleConfirmEditButton}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          title="Batal"
+                          onClick={handleCancelEditButton}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div
+                        key={btn.id ?? `baru-${i}`}
+                        className="flex items-center justify-between gap-2 rounded-md border bg-background px-2 py-1"
+                      >
+                        <span className="flex items-center gap-1.5 font-mono text-xs">
+                          <MousePointerClick className="h-3 w-3 text-primary" />
+                          {btn.code}
+                          {btn.id === null && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 font-sans">
+                              baru
+                            </Badge>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            title="Edit button"
+                            disabled={isSaving || editingButtonIndex !== null}
+                            onClick={() => handleStartEditButton(i)}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-destructive hover:text-destructive"
+                            title="Hapus button"
+                            disabled={isSaving || editingButtonIndex !== null}
+                            onClick={() => handleRemoveButton(i)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  )
                 )}
               </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                Perubahan button (tambah, edit, hapus) baru tersimpan setelah klik Simpan Sub Menu.
+              </p>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenSubMenuModal(false)}>
+            <Button variant="outline" onClick={() => setOpenSubMenuModal(false)} disabled={isSaving}>
               Batal
             </Button>
-            <Button onClick={handleSaveSubMenu}>Simpan Sub Menu</Button>
+            <Button onClick={handleSaveSubMenu} disabled={isSaving}>
+              {isSaving ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</>
+              ) : (
+                "Simpan Sub Menu"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// Pilihan ikon menu utama. Klik ikon yang sedang dipilih (atau "Hapus ikon") untuk mengosongkan.
+function IconPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string
+  onChange: (value: string) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="grid max-h-[150px] grid-cols-8 gap-1.5 overflow-y-auto rounded-md border bg-muted/20 p-2">
+        {MENU_ICON_NAMES.map((name) => {
+          const Icon = MENU_ICONS[name]
+          const selected = value === name
+
+          return (
+            <button
+              key={name}
+              type="button"
+              title={name}
+              aria-label={name}
+              aria-pressed={selected}
+              disabled={disabled}
+              onClick={() => onChange(selected ? "" : name)}
+              className={`flex h-9 w-9 items-center justify-center rounded-md border transition-colors disabled:opacity-50 ${
+                selected
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-transparent hover:bg-muted"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          {value ? (
+            <>
+              Dipilih: <span className="font-mono text-foreground">{value}</span>
+            </>
+          ) : (
+            "Tanpa ikon"
+          )}
+        </span>
+        {value && (
+          <button
+            type="button"
+            disabled={disabled}
+            className="text-primary underline-offset-4 hover:underline"
+            onClick={() => onChange("")}
+          >
+            Hapus ikon
+          </button>
+        )}
+      </div>
     </div>
   )
 }
