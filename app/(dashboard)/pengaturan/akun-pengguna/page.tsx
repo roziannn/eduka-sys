@@ -489,7 +489,7 @@ export default function PengaturanPenggunaPage() {
           <h1 className="text-xl font-bold flex items-center gap-2">Pengaturan Akun Pengguna</h1>
           <p className="text-sm text-muted-foreground">Kelola data akun pengguna, penetapan peran, dan pengaturan kredensial login.</p>
         </div>
-        <Can code="btn-add">
+        <Can code="btn-create">
           <Button onClick={handleOpenAddUser}><Plus className="mr-2 h-4 w-4" /> Tambah Pengguna Baru</Button>
         </Can>
       </div>

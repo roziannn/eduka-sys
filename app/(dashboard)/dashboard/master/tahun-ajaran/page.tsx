@@ -140,7 +140,7 @@ export default function TahunAjaranPage() {
           <h1 className="text-2xl font-bold">Master Tahun Ajaran</h1>
           <p className="text-sm text-muted-foreground">Kelola periode tahun ajaran & semester.</p>
         </div>
-        <Can code="btn-add">
+        <Can code="btn-create">
           <Button onClick={() => handleOpen()}><Plus className="mr-2 h-4 w-4" /> Tambah</Button>
         </Can>
       </div>
