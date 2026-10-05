@@ -78,6 +78,7 @@ interface Peserta {
   remedialDipakai: number
   sisaRemedial: number
   bisaRemedial: boolean
+  alasanTanpaRemedial: string | null
   izinMenunggu: boolean
   bisaUjianUlang: boolean
   mulai: string | null
@@ -209,6 +210,7 @@ export default function DetailHasilUjianPage() {
   const params = useParams()
   const ujianId = params?.id as string
   const queryClient = useQueryClient()
+  const can = useCan()
   const pesertaKey = ["hasil-ujian", ujianId]
 
   const { data, isLoading, error } = useQuery<PesertaData>({
@@ -488,6 +490,17 @@ export default function DetailHasilUjianPage() {
                                 <FileText className="mr-1 h-3.5 w-3.5" /> Lihat Hasil
                               </Button>
                             </Can>
+                          )}
+                          {/* Tombol disembunyikan kalau syaratnya belum terpenuhi. Alasannya ditulis di bawah. */}
+                          {item.bisaRemedial && !can("btn-edit") && (
+                            <span className="self-center text-[11px] text-amber-600">
+                              Remedial tersedia, tapi akun Anda belum punya akses btn-edit di menu ini
+                            </span>
+                          )}
+                          {!item.bisaRemedial && item.alasanTanpaRemedial && (
+                            <span className="self-center text-[11px] text-muted-foreground">
+                              Remedial: {item.alasanTanpaRemedial}
+                            </span>
                           )}
                           {item.bisaRemedial && (
                             <Can code="btn-edit">

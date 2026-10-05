@@ -69,6 +69,20 @@ function bisaRemedial(r: PesertaRow, kkm: number) {
   )
 }
 
+// Kenapa tombol Remedial tidak muncul untuk siswa ini. null = tidak perlu penjelasan
+// (belum mengerjakan, atau remedial memang bisa diberikan).
+function alasanTanpaRemedial(r: PesertaRow, kkm: number): string | null {
+  if (!r.percobaan_id || bisaRemedial(r, kkm)) return null
+  if (r.status === "Berjalan") return "Siswa masih mengerjakan"
+  if (r.izin_menunggu_ke !== null) return "Izin remedial menunggu dipakai siswa"
+  if (r.status_nilai !== "Final" || r.nilai_final === null) {
+    return "Soal essai belum selesai dinilai"
+  }
+  if (r.nilai_final >= kkm) return `Nilai sudah mencapai KKM (${kkm})`
+  if (r.remedial_dipakai >= MAX_REMEDIAL) return "Kesempatan remedial sudah habis"
+  return null
+}
+
 export const hasilUjianService = {
   async list() {
     return (await hasilUjianRepository.findUjianList()).map(formatUjian)
@@ -92,6 +106,7 @@ export const hasilUjianService = {
       remedialDipakai: r.remedial_dipakai,
       sisaRemedial: Math.max(0, MAX_REMEDIAL - r.remedial_dipakai),
       bisaRemedial: bisaRemedial(r, header.nilai_kkm),
+      alasanTanpaRemedial: alasanTanpaRemedial(r, header.nilai_kkm),
       izinMenunggu: r.izin_menunggu_ke !== null,
       // Ujian ulang hanya untuk percobaan terakhir, dan tidak saat izin remedial sedang menunggu
       bisaUjianUlang: r.percobaan_id !== null && r.izin_menunggu_ke === null,
