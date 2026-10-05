@@ -6,6 +6,8 @@ import bcrypt from 'bcryptjs'
 import { queryOne, query } from '@/lib/db'
 import { createSession, destroySession } from '@/lib/auth'
 import { roleAccessService } from '@/services/role-access.service'
+import { landingUrl } from '@/lib/access'
+import type { SessionAccess } from '@/lib/auth'
 
 type UserRow = {
   id: string
@@ -64,9 +66,10 @@ export async function login(formData: FormData) {
     [user.id]
   )
 
+  let access: SessionAccess
   try {
     // Daftar menu dan button yang boleh dipakai ikut disimpan di sesi
-    const access = await roleAccessService.forSession(user.role_id)
+    access = await roleAccessService.forSession(user.role_id)
 
     await createSession({
       userId: user.id,
@@ -80,7 +83,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  redirect(landingUrl(access))
 }
 
 export async function logout() {

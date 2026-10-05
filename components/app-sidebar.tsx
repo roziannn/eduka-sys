@@ -13,87 +13,16 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import {
-  LayoutDashboardIcon,
-  DatabaseIcon,
-  FileCheck2Icon,
-  Settings2,
-  Leaf,
-} from "lucide-react"
+import { Layers, Leaf } from "lucide-react"
+import type { SessionAccess } from "@/lib/auth"
+import { getMenuIcon } from "@/lib/menu-icons"
 
 type SidebarUser = {
   name: string
   email: string
   avatar: string
-}
-
-const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: <LayoutDashboardIcon />,
-      isActive: true,
-    },
-    {
-      title: "Master Data",
-      url: "#",
-      icon: <DatabaseIcon />,
-      items: [
-        {
-          title: "Tahun Ajaran",
-          url: "/dashboard/master/tahun-ajaran",
-        },
-        {
-          title: "Mata Pelajaran",
-          url: "/dashboard/master/mata-pelajaran",
-        },
-        {
-          title: "Data Kelas",
-          url: "/dashboard/master/data-kelas",
-        },
-        {
-          title: "Template e-Rapor",
-          url: "/dashboard/master/template-rapor",
-        },
-      ],
-    },
-    {
-      title: "Ujian dan Kuis",
-      url: "#",
-      icon: <FileCheck2Icon />,
-      items: [
-        {
-          title: "Soal Ujian",
-          url: "/dashboard/soal-ujian",
-        },
-        {
-          title: "Hasil Ujian",
-          url: "/dashboard/hasil-ujian",
-        },
-      ],
-    },
-    {
-      title: "Pengaturan",
-      url: "#",
-      icon: <Settings2 />,
-      items: [
-        {
-          title: "Akun Pengguna",
-          url: "/pengaturan/akun-pengguna",
-        },
-        {
-          title: "Hak Akses",
-          url: "/pengaturan/hak-akses",
-        },
-        {
-          title: "Menu Aplikasi",
-          url: "/pengaturan/menu-aplikasi",
-        },
-      ],
-    },
-  ],
-  navSecondary: [],
+  // Menu dan button yang boleh dipakai, dari sesi login
+  access: SessionAccess
 }
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
@@ -101,6 +30,21 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 }
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
+  // Menu dibangun dari hak akses sesi, sudah urut menurut seq dari server
+  const navMain = React.useMemo(
+    () =>
+      user.access.menus.map((menu) => {
+        const Icon = getMenuIcon(menu.icon) ?? Layers
+        return {
+          title: menu.name,
+          url: menu.url,
+          icon: <Icon />,
+          items: menu.subs.map((sub) => ({ title: sub.name, url: sub.url })),
+        }
+      }),
+    [user.access]
+  )
+
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -120,8 +64,8 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain items={navMain} />
+        <NavSecondary items={[]} className="mt-auto" />
       </SidebarContent>
 
       <SidebarFooter>
