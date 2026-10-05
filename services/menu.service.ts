@@ -29,7 +29,7 @@ export interface SubMenuDto {
   id: string
   namaSubMenu: string
   url: string
-  urutan: number
+  sequence: number
   isAktif: boolean
   buttons: ButtonDto[]
 }
@@ -39,7 +39,7 @@ export interface MenuDto {
   namaMenu: string
   iconName: string | null
   url: string
-  urutan: number
+  sequence: number
   isAktif: boolean
   subMenus: SubMenuDto[]
 }
@@ -193,7 +193,7 @@ export const menuService = {
         id: m.id,
         namaSubMenu: m.name,
         url: m.url ?? "",
-        urutan: m.seq,
+        sequence: m.seq,
         isAktif: m.is_active,
         buttons: buttonsByMenu.get(m.id) ?? [],
       })
@@ -207,7 +207,7 @@ export const menuService = {
         namaMenu: m.name,
         iconName: m.icon,
         url: m.url ?? "#",
-        urutan: m.seq,
+        sequence: m.seq,
         isAktif: m.is_active,
         subMenus: subsByParent.get(m.id) ?? [],
       }))
