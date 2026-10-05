@@ -26,6 +26,7 @@ export type CreateMenuInput = {
   name: string
   url: string
   icon: string | null
+  seq?: number // undefined = otomatis ditaruh paling akhir di antara menu yang satu induk
   buttons?: ButtonInput[] // undefined = tidak ada button
 }
 
@@ -33,6 +34,7 @@ export type UpdateMenuInput = {
   name: string
   url: string
   icon?: string | null // undefined = ikon tidak diubah, null = hapus ikon
+  seq?: number // undefined = urutan tidak diubah
   buttons?: ButtonInput[] // undefined = button tidak disentuh
 }
 
@@ -143,15 +145,19 @@ export const menuRepository = {
   },
 
   // Menu dan button-nya disimpan dalam satu transaksi.
-  // Urutan baru = urutan terakhir di antara menu yang satu induk.
+  // Urutan tidak diisi = urutan terakhir di antara menu yang satu induk.
   create(input: CreateMenuInput, actorId: string) {
     return withTransaction(async (client) => {
-      const next = await client.query<{ next: number }>(
-        `SELECT COALESCE(MAX(seq), 0) + 1 AS next
-         FROM "CORE_Menu"
-         WHERE parent_id IS NOT DISTINCT FROM $1::uuid`,
-        [input.parentId]
-      )
+      let seq = input.seq
+      if (seq === undefined) {
+        const next = await client.query<{ next: number }>(
+          `SELECT COALESCE(MAX(seq), 0) + 1 AS next
+           FROM "CORE_Menu"
+           WHERE parent_id IS NOT DISTINCT FROM $1::uuid`,
+          [input.parentId]
+        )
+        seq = next.rows[0].next
+      }
 
       const res = await client.query<{ id: string }>(
         `INSERT INTO "CORE_Menu"
@@ -163,7 +169,7 @@ export const menuRepository = {
           input.name,
           input.url,
           input.icon,
-          next.rows[0].next,
+          seq,
           actorId,
         ]
       )
@@ -176,8 +182,9 @@ export const menuRepository = {
     })
   },
 
-  // false kalau menu tidak ditemukan. Menu induk dan urutan tidak diubah di sini.
+  // false kalau menu tidak ditemukan. Menu induk tidak diubah di sini.
   // $5 menandai apakah ikon ikut diubah, $6 nilai ikon barunya (boleh null = hapus ikon).
+  // $7 urutan baru, null = urutan tidak diubah.
   update(id: string, input: UpdateMenuInput, actorId: string) {
     return withTransaction(async (client) => {
       const res = await client.query(
@@ -185,6 +192,7 @@ export const menuRepository = {
          SET name = $2,
              url = $3,
              icon = CASE WHEN $5::boolean THEN $6::varchar ELSE icon END,
+             seq = COALESCE($7::int, seq),
              updated_by = $4,
              updated_at = NOW()
          WHERE id = $1
@@ -196,6 +204,7 @@ export const menuRepository = {
           actorId,
           input.icon !== undefined,
           input.icon ?? null,
+          input.seq ?? null,
         ]
       )
       if (res.rowCount === 0) return false
