@@ -11,6 +11,7 @@ import { Table } from "@tiptap/extension-table"
 import { TableRow } from "@tiptap/extension-table-row"
 import { TableHeader } from "@tiptap/extension-table-header"
 import { TableCell } from "@tiptap/extension-table-cell"
+import { TextStyle, FontFamily, FontSize } from "@tiptap/extension-text-style"
 import { Extension } from "@tiptap/core"
 import {
   Bold, Italic, Underline as UnderlineIcon,
@@ -179,7 +180,20 @@ export interface RichTextFeatures {
   table?: boolean
   image?: boolean
   math?: boolean
+  font?: boolean // pilihan jenis font dan ukuran. Default mati: HTML soal tidak menyimpan gaya font
 }
+
+// Pilihan font dan ukuran (pt, satuan cetak)
+const FONT_FAMILIES = [
+  "Arial",
+  "Times New Roman",
+  "Calibri",
+  "Verdana",
+  "Tahoma",
+  "Georgia",
+  "Courier New",
+]
+const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32]
 
 interface RichTextEditorProps {
   value: string
@@ -209,6 +223,7 @@ export default function RichTextEditor({
   const showTable = features?.table ?? true
   const showImage = features?.image ?? true
   const showMath = features?.math ?? true
+  const showFont = features?.font ?? false
 
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0)
 
@@ -229,6 +244,7 @@ export default function RichTextEditor({
         },
       }),
       Underline,
+      ...(showFont ? [TextStyle, FontFamily, FontSize] : []),
       CustomImage,
       Mathematics,
       CustomIndent,
@@ -364,6 +380,50 @@ export default function RichTextEditor({
             >
               <Redo2 className="h-3.5 w-3.5" />
             </ToolbarButton>
+
+            <Divider />
+          </>
+        )}
+
+        {/* Font & ukuran: select bawaan browser supaya seleksi teks di editor tidak hilang */}
+        {showFont && (
+          <>
+            <select
+              aria-label="Jenis font"
+              title="Jenis font"
+              value={editor.getAttributes("textStyle").fontFamily ?? ""}
+              onChange={(e) => {
+                const family = e.target.value
+                if (family) editor.chain().focus().setFontFamily(family).run()
+                else editor.chain().focus().unsetFontFamily().run()
+              }}
+              className="h-8 w-[120px] rounded-md border border-input bg-background px-1.5 text-xs"
+            >
+              <option value="">Font bawaan</option>
+              {FONT_FAMILIES.map((f) => (
+                <option key={f} value={f} style={{ fontFamily: f }}>
+                  {f}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Ukuran font"
+              title="Ukuran font (pt)"
+              value={editor.getAttributes("textStyle").fontSize ?? ""}
+              onChange={(e) => {
+                const size = e.target.value
+                if (size) editor.chain().focus().setFontSize(size).run()
+                else editor.chain().focus().unsetFontSize().run()
+              }}
+              className="h-8 w-[70px] rounded-md border border-input bg-background px-1.5 text-xs"
+            >
+              <option value="">Ukuran</option>
+              {FONT_SIZES.map((n) => (
+                <option key={n} value={`${n}pt`}>
+                  {n}
+                </option>
+              ))}
+            </select>
 
             <Divider />
           </>

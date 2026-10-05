@@ -27,12 +27,19 @@ const ALLOWED_STYLES = {
   },
 }
 
-// Teks biasa (Text Box template rapor): tanpa gambar, script, dan link
+// Teks biasa (Text Box template rapor): tanpa gambar, script, dan link.
+// Boleh ada span dengan jenis dan ukuran font dari editor.
 export function sanitizeRichText(html: string): string {
   return sanitizeHtml(html, {
-    allowedTags: BASE_TAGS,
-    allowedAttributes: BASE_ATTRIBUTES,
-    allowedStyles: ALLOWED_STYLES,
+    allowedTags: [...BASE_TAGS, "span"],
+    allowedAttributes: { ...BASE_ATTRIBUTES, span: ["style"] },
+    allowedStyles: {
+      "*": {
+        ...ALLOWED_STYLES["*"],
+        "font-family": [/^[A-Za-z0-9 ,'"-]{1,100}$/],
+        "font-size": [/^\d{1,3}(\.\d{1,2})?(pt|px)$/],
+      },
+    },
   })
 }
 
