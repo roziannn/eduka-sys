@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
+import { Can } from "@/components/access-provider"
 
 export type RoleType = "ADMINISTRATOR" | "GURU" | "SISWA"
 
@@ -488,7 +489,9 @@ export default function PengaturanPenggunaPage() {
           <h1 className="text-xl font-bold flex items-center gap-2">Pengaturan Akun Pengguna</h1>
           <p className="text-sm text-muted-foreground">Kelola data akun pengguna, penetapan peran, dan pengaturan kredensial login.</p>
         </div>
-        <Button onClick={handleOpenAddUser}><Plus className="mr-2 h-4 w-4" /> Tambah Pengguna Baru</Button>
+        <Can code="btn-add">
+          <Button onClick={handleOpenAddUser}><Plus className="mr-2 h-4 w-4" /> Tambah Pengguna Baru</Button>
+        </Can>
       </div>
 
       {/* Filter Toolbar */}
@@ -683,12 +686,16 @@ export default function PengaturanPenggunaPage() {
                   <TableCell className="text-xs text-muted-foreground">{user.lastLogin}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Reset Password" onClick={() => handleOpenResetPassword(user)}>
-                        <KeyRound className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit Pengguna" onClick={() => handleOpenEditUser(user)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <Can code="btn-reset-password">
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Reset Password" onClick={() => handleOpenResetPassword(user)}>
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                      </Can>
+                      <Can code="btn-edit">
+                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit Pengguna" onClick={() => handleOpenEditUser(user)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </Can>
                     </div>
                   </TableCell>
                 </TableRow>

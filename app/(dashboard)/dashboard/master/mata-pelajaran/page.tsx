@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
+import { Can } from "@/components/access-provider"
 
 type Kategori = "Wajib" | "Pilihan" | "Muatan Lokal"
 
@@ -155,7 +156,9 @@ export default function MataPelajaranPage() {
           <h1 className="text-2xl font-bold">Master Mata Pelajaran</h1>
           <p className="text-sm text-muted-foreground">Kelola kurikulum dan daftar mata pelajaran.</p>
         </div>
-        <Button onClick={() => handleOpen()}><Plus className="mr-2 h-4 w-4" /> Tambah</Button>
+        <Can code="btn-add">
+          <Button onClick={() => handleOpen()}><Plus className="mr-2 h-4 w-4" /> Tambah</Button>
+        </Can>
       </div>
 
       <Input
@@ -213,9 +216,11 @@ export default function MataPelajaranPage() {
                   <TableCell className="text-sm">{formatDate(item.createdAt)}</TableCell>
                   <TableCell className="text-sm">{item.createdBy}</TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => handleOpen(item)}>
-                      <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
-                    </Button>
+                    <Can code="btn-edit">
+                      <Button variant="outline" size="sm" onClick={() => handleOpen(item)}>
+                        <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                      </Button>
+                    </Can>
                   </TableCell>
                 </TableRow>
               ))
