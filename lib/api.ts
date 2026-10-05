@@ -26,6 +26,20 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   core_menufunction: "Kode button sudah dipakai di menu ini",
 }
 
+// Semua user aktif yang sudah login boleh lewat
+export async function requireUser() {
+  const session = await getSession()
+  if (!session) {
+    throw new ApiError(401, "Sesi berakhir, silakan login ulang")
+  }
+
+  const user = await userRepository.findById(session.userId)
+  if (!user || !user.is_active) {
+    throw new ApiError(401, "Sesi berakhir, silakan login ulang")
+  }
+  return user
+}
+
 // Hanya user ADMIN yang aktif yang boleh lewat
 export async function requireAdmin() {
   const session = await getSession()
