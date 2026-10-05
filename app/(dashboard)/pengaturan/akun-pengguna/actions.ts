@@ -88,7 +88,8 @@ export async function createNewUser(payload: {
   status: string
   password?: string
 }) {
-  if (!(await requireAdmin())) return { error: 'Anda tidak memiliki akses' }
+  const admin = await requireAdmin()
+  if (!admin) return { error: 'Anda tidak memiliki akses' }
 
   const email = payload.email.trim()
   const nama = payload.nama.trim()
@@ -103,15 +104,20 @@ export async function createNewUser(payload: {
 
     const passwordHash = await bcrypt.hash(payload.password || DEFAULT_PASSWORD, 10)
 
-    const id = await userRepository.create({
-      roleId,
-      username: email.split('@')[0],
-      email,
-      fullName: nama,
-      nipNisn: cleanNipNisn(payload.nipNisn),
-      passwordHash,
-      isActive: payload.status !== 'Nonaktif',
-    })
+    // Tanpa penempatan kelas: halaman ini tidak mengatur kelas
+    const id = await userRepository.create(
+      {
+        roleId,
+        username: email.split('@')[0],
+        email,
+        fullName: nama,
+        nipNisn: cleanNipNisn(payload.nipNisn),
+        passwordHash,
+        isActive: payload.status !== 'Nonaktif',
+      },
+      null,
+      admin.id
+    )
 
     revalidatePath(USERS_PATH)
     return { success: true, data: { id } }
@@ -130,7 +136,8 @@ export async function updateUser(
     status: string
   }
 ) {
-  if (!(await requireAdmin())) return { error: 'Anda tidak memiliki akses' }
+  const admin = await requireAdmin()
+  if (!admin) return { error: 'Anda tidak memiliki akses' }
 
   const email = payload.email.trim()
   const nama = payload.nama.trim()
@@ -143,13 +150,19 @@ export async function updateUser(
     const roleId = await roleRepository.findIdByNormalizedName(roleNormalized)
     if (!roleId) return { error: 'Role tidak ditemukan di database' }
 
-    const updated = await userRepository.update(userId, {
-      roleId,
-      email,
-      fullName: nama,
-      nipNisn: cleanNipNisn(payload.nipNisn),
-      isActive: payload.status !== 'Nonaktif',
-    })
+    // placement null = penempatan kelas tidak diubah
+    const updated = await userRepository.update(
+      userId,
+      {
+        roleId,
+        email,
+        fullName: nama,
+        nipNisn: cleanNipNisn(payload.nipNisn),
+        isActive: payload.status !== 'Nonaktif',
+      },
+      null,
+      admin.id
+    )
     if (!updated) return { error: 'Pengguna tidak ditemukan' }
 
     revalidatePath(USERS_PATH)

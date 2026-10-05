@@ -27,6 +27,13 @@ export const roleRepository = {
     )
   },
 
+  findById(id: string) {
+    return queryOne<{ id: string; code: string; name: string }>(
+      `SELECT id, normalized_name AS code, name FROM "CORE_Role" WHERE id = $1`,
+      [id]
+    )
+  },
+
   async findIdByNormalizedName(normalizedName: string) {
     const row = await queryOne<{ id: string }>(
       `SELECT id FROM "CORE_Role" WHERE normalized_name = $1`,

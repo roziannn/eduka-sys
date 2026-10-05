@@ -3,6 +3,8 @@
 import * as React from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import {
   ChevronLeft,
   ShieldCheck,
@@ -11,16 +13,18 @@ import {
   ChevronRight,
   Layers,
   MousePointerClick,
+  Loader2,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Switch } from "@/components/ui/switch"
+import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
 
 interface ButtonAccess {
   id: string
-  name: string
+  code: string
   enabled: boolean
 }
 
@@ -40,81 +44,53 @@ interface MenuAccess {
   subMenus: SubMenuAccess[]
 }
 
-const initialAccessMatrix: MenuAccess[] = [
-  {
-    id: "m-1",
-    namaMenu: "Dashboard",
-    url: "/dashboard",
-    enabled: true,
-    subMenus: [],
-  },
-  {
-    id: "m-2",
-    namaMenu: "Ujian dan Kuis",
-    url: "#",
-    enabled: true,
-    subMenus: [
-      {
-        id: "sm-1",
-        namaSubMenu: "Soal Ujian",
-        url: "/dashboard/soal-ujian",
-        enabled: true,
-        buttons: [
-          { id: "b-1", name: "btn-add", enabled: true },
-          { id: "b-2", name: "btn-edit", enabled: true },
-          { id: "b-3", name: "btn-delete", enabled: false },
-        ],
-      },
-      {
-        id: "sm-2",
-        namaSubMenu: "Soal Kuis",
-        url: "/dashboard/soal-kuis",
-        enabled: true,
-        buttons: [
-          { id: "b-4", name: "btn-add", enabled: true },
-          { id: "b-5", name: "btn-publish", enabled: true },
-        ],
-      },
-      {
-        id: "sm-3",
-        namaSubMenu: "Hasil Ujian",
-        url: "/dashboard/hasil-ujian",
-        enabled: true,
-        buttons: [
-          { id: "b-6", name: "btn-print", enabled: true },
-          { id: "b-7", name: "btn-retake", enabled: false },
-        ],
-      },
-    ],
-  },
-  {
-    id: "m-3",
-    namaMenu: "Pengaturan",
-    url: "#",
-    enabled: false,
-    subMenus: [
-      {
-        id: "sm-5",
-        namaSubMenu: "Menu Aplikasi",
-        url: "/dashboard/pengaturan/menu-aplikasi",
-        enabled: false,
-        buttons: [
-          { id: "b-8", name: "btn-save", enabled: false },
-          { id: "b-9", name: "btn-add-sub", enabled: false },
-        ],
-      },
-    ],
-  },
-]
+// Bentuk data dari GET /api/roles/[id]/access
+interface RoleAccessData {
+  role: { id: string; code: string; name: string }
+  menus: MenuAccess[]
+}
 
 export default function DetailHakAksesPage() {
   const params = useParams()
   const roleId = params?.id as string
 
-  const [accessMatrix, setAccessMatrix] = React.useState<MenuAccess[]>(initialAccessMatrix)
-  const [expandedRow, setExpandedRow] = React.useState<Record<string, boolean>>({
-    "m-2": true,
-    "m-3": true,
+  const queryClient = useQueryClient()
+  const accessKey = ["role-access", roleId]
+
+  const { data, isLoading, error } = useQuery<RoleAccessData>({
+    queryKey: accessKey,
+    queryFn: () => fetchJson<RoleAccessData>(`/api/roles/${roleId}/access`),
+    enabled: Boolean(roleId),
+  })
+
+  const [accessMatrix, setAccessMatrix] = React.useState<MenuAccess[]>([])
+  const [expandedRow, setExpandedRow] = React.useState<Record<string, boolean>>({})
+
+  // Isi matriks dari server setiap kali data baru datang (pertama kali dan setelah simpan)
+  const expandedInitialized = React.useRef(false)
+  React.useEffect(() => {
+    if (!data) return
+    setAccessMatrix(data.menus)
+    if (!expandedInitialized.current) {
+      expandedInitialized.current = true
+      setExpandedRow(
+        Object.fromEntries(data.menus.filter((m) => m.subMenus.length > 0).map((m) => [m.id, true]))
+      )
+    }
+  }, [data])
+
+  React.useEffect(() => {
+    if (error) toast.error(`Gagal memuat hak akses: ${getErrorMessage(error)}`)
+  }, [error])
+
+  const saveMutation = useMutation({
+    mutationFn: (body: { menuIds: string[]; functionIds: string[] }) =>
+      fetchJson(`/api/roles/${roleId}/access`, { method: "PUT", body }),
+    onSuccess: () => {
+      toast.success("Izin hak akses berhasil diperbarui!")
+      return queryClient.invalidateQueries({ queryKey: accessKey })
+    },
+    onError: (err) => toast.error(`Gagal menyimpan hak akses: ${getErrorMessage(err)}`),
   })
 
   const toggleExpand = (id: string) => {
@@ -190,8 +166,18 @@ export default function DetailHakAksesPage() {
   }
 
   const handleSaveMatrix = () => {
-    console.log("Akses disimpan untuk Role ID:", roleId, accessMatrix)
-    alert("Izin hak akses berhasil diperbarui!")
+    const menuIds: string[] = []
+    const functionIds: string[] = []
+    for (const menu of accessMatrix) {
+      if (menu.enabled) menuIds.push(menu.id)
+      for (const sub of menu.subMenus) {
+        if (sub.enabled) menuIds.push(sub.id)
+        for (const btn of sub.buttons) {
+          if (btn.enabled) functionIds.push(btn.id)
+        }
+      }
+    }
+    saveMutation.mutate({ menuIds, functionIds })
   }
 
   return (
@@ -200,10 +186,10 @@ export default function DetailHakAksesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-primary" /> Matriks Matriks Izin Akses
+            <ShieldCheck className="h-6 w-6 text-primary" /> Matriks Izin Akses
           </h1>
           <p className="text-sm text-muted-foreground">
-            Pengaturan visibilitas menu dan fitur tombol untuk Role ID: <span className="font-semibold text-foreground">{roleId}</span>
+            Pengaturan visibilitas menu dan fitur tombol untuk Role: <span className="font-semibold text-foreground">{data?.role.name ?? "..."}</span>
           </p>
         </div>
 
@@ -213,13 +199,17 @@ export default function DetailHakAksesPage() {
               <ChevronLeft className="mr-2 h-4 w-4" /> Kembali
             </Button>
           </Link>
-          <Button onClick={handleSaveMatrix}>
-            <Save className="mr-2 h-4 w-4" /> Simpan Perubahan Akses
+          <Button onClick={handleSaveMatrix} disabled={isLoading || !data || saveMutation.isPending}>
+            {saveMutation.isPending ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</>
+            ) : (
+              <><Save className="mr-2 h-4 w-4" /> Simpan Perubahan Akses</>
+            )}
           </Button>
         </div>
       </div>
 
-      {/* Tabel Matriks Matriks Akses */}
+      {/* Tabel Matriks Akses */}
       <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
@@ -232,6 +222,21 @@ export default function DetailHakAksesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={5} className="h-24 text-center">
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Memuat data...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : accessMatrix.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="h-24 text-center text-sm text-muted-foreground">
+                  Belum ada menu.
+                </TableCell>
+              </TableRow>
+            ) : null}
             {accessMatrix.map((menu) => {
               const isExpanded = expandedRow[menu.id]
               const hasSub = menu.subMenus.length > 0
@@ -284,7 +289,7 @@ export default function DetailHakAksesPage() {
                         <TableCell>
                           <Switch
                             checked={sub.enabled}
-                            disabled={!menu.enabled}
+                            disabled={!menu.enabled || saveMutation.isPending}
                             onCheckedChange={() => handleToggleSubMenu(menu.id, sub.id)}
                           />
                         </TableCell>
@@ -303,7 +308,7 @@ export default function DetailHakAksesPage() {
                                   }`}
                                 >
                                   <MousePointerClick className="h-3 w-3" />
-                                  <span>{btn.name}</span>
+                                  <span>{btn.code}</span>
                                   <Switch
                                     className="scale-75 origin-right"
                                     checked={btn.enabled}
