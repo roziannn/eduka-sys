@@ -40,6 +40,16 @@ import { QueryProvider } from "@/components/query-provider"
 import { ElementPreview } from "@/components/rapor-builder/element-preview"
 import { ElementProperties } from "@/components/rapor-builder/element-properties"
 import RichTextEditor, { type RichTextFeatures } from "@/components/rich-text-editor"
+import {
+  API_PATH,
+  BUILDER_PATH,
+  DRAFT_STORAGE_KEY,
+  LIST_PATH,
+  PAPER_DIMENSIONS,
+  PREVIEW_PATH,
+  RICH_CONTENT_CLASS,
+  htmlOf,
+} from "@/components/rapor-builder/shared"
 import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
 import {
   DEFAULT_PAGE,
@@ -51,19 +61,11 @@ import {
   type TemplatePage,
 } from "@/types/rapor-template"
 
-const LIST_PATH = "/dashboard/master/template-rapor"
-const BUILDER_PATH = `${LIST_PATH}/builder`
-const API_PATH = "/api/template-rapor"
 const TEMPLATE_KEY = ["template-rapor"]
 
 // Tipe data drag: dari palette (komponen baru) atau dari canvas (pindah urutan)
 const PALETTE_DRAG_TYPE = "application/react-dnd-type"
 const CANVAS_DRAG_TYPE = "application/x-canvas-element"
-
-const PAPER_DIMENSIONS: Record<PaperSize, { width: number; height: number }> = {
-  A4: { width: 210, height: 297 },
-  F4: { width: 215, height: 330 },
-}
 
 const JENIS_LABEL: Record<string, string> = {
   SEMESTER: "Rapor Semester",
@@ -79,10 +81,6 @@ const TEXTBOX_EDITOR_FEATURES: RichTextFeatures = {
   math: false,
   font: true,
 }
-
-// Gaya tampilan HTML rich text di canvas
-const RICH_CONTENT_CLASS =
-  "text-xs [&_p]:m-0 [&_p]:min-h-[1em] [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_th]:border [&_td]:p-1 [&_th]:p-1 [&_th]:bg-muted/30"
 
 interface TemplateDetail {
   id: string
@@ -118,16 +116,6 @@ const DEFAULT_ELEMENTS: TemplateElement[] = [
 
 const newId = () =>
   `el_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-
-const textOf = (el: TemplateElement) =>
-  typeof el.props.text === "string" ? el.props.text : ""
-
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-
-// Isi Text Box sebagai HTML. Template lama yang hanya punya `text` dibungkus jadi paragraf.
-const htmlOf = (el: TemplateElement) =>
-  typeof el.props.html === "string" ? el.props.html : `<p>${escapeHtml(textOf(el))}</p>`
 
 export default function TemplateBuilderPage() {
   return (
@@ -342,6 +330,24 @@ function TemplateBuilder() {
   }
 
   // ---------- SIMPAN ----------
+  // Preview memakai isi canvas saat ini (draft), jadi tidak perlu disimpan dulu
+  const handlePreview = () => {
+    try {
+      localStorage.setItem(
+        DRAFT_STORAGE_KEY,
+        JSON.stringify({
+          nama: templateName.trim() || "Template Rapor",
+          jenis: templateType,
+          konten: { schemaVersion: 1, page: pageSetup, elements: normalizeOrder(canvasElements) },
+        })
+      )
+    } catch {
+      toast.error("Gagal menyiapkan preview: penyimpanan browser tidak tersedia")
+      return
+    }
+    window.open(`${PREVIEW_PATH}?draft=1`, "_blank")
+  }
+
   const handleSave = () => {
     if (!templateName.trim()) {
       toast.error("Nama template wajib diisi!")
@@ -427,7 +433,13 @@ function TemplateBuilder() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled title="Belum tersedia">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={handlePreview}
+            title="Lihat hasil cetak dengan isi canvas saat ini, tanpa perlu disimpan"
+          >
             <EyeIcon className="h-3.5 w-3.5" /> Preview PDF
           </Button>
           <Button size="sm" className="gap-1.5 text-xs" onClick={handleSave} disabled={saveMutation.isPending}>

@@ -37,6 +37,7 @@ interface TemplateItem {
 // Key yang sama dengan builder, jadi daftar ikut ter-refresh setelah template disimpan
 const TEMPLATE_KEY = ["template-rapor"]
 const BUILDER_PATH = "/dashboard/master/template-rapor/builder"
+const PREVIEW_PATH = "/dashboard/master/template-rapor/preview"
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("id-ID", {
@@ -145,16 +146,13 @@ export default function TemplateRaporListPage() {
                   <PencilIcon className="h-3.5 w-3.5" />
                   Edit
                 </Link>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  disabled
-                  title="Belum tersedia"
+                <Link
+                  href={`${PREVIEW_PATH}?id=${template.id}`}
+                  className={buttonVariants({ variant: "secondary", size: "sm", className: "gap-1.5 text-xs" })}
                 >
                   <EyeIcon className="h-3.5 w-3.5" />
                   Preview
-                </Button>
+                </Link>
               </CardFooter>
             </Card>
           ))}
