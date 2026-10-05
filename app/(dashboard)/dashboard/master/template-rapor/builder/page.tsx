@@ -704,7 +704,7 @@ function TemplateBuilder() {
 
                   {selectedElement.type === "textbox" && (
                     <p className="text-xs text-muted-foreground">
-                      Klik kotak teks di canvas untuk mengedit isinya langsung. Toolbar format muncul di atas kotak.
+                      Klik kotak teks di canvas untuk mengedit isinya langsung. Toolbar format muncul di bagian atas kotak.
                     </p>
                   )}
                 </div>

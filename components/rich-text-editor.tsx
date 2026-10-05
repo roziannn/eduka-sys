@@ -187,7 +187,7 @@ interface RichTextEditorProps {
   placeholder?: string
   isError?: boolean
   features?: RichTextFeatures
-  // Edit langsung di tempat: toolbar melayang di atas kotak, tanpa border dan padding editor
+  // Edit langsung di tempat: toolbar di bagian atas kotak, tanpa border dan padding editor
   floating?: boolean
   // Konten tambahan di awal toolbar (mode floating), misalnya handle geser
   toolbarLead?: React.ReactNode
@@ -322,7 +322,7 @@ export default function RichTextEditor({
     <div
       className={
         floating
-          ? "relative flex flex-col"
+          ? "flex flex-col"
           : "border border-input rounded-md bg-background overflow-hidden shadow-sm flex flex-col"
       }
     >
@@ -341,7 +341,7 @@ export default function RichTextEditor({
       <div
         className={
           floating
-            ? "absolute bottom-full left-0 z-30 mb-3 flex w-max items-center gap-0.5 rounded-md border bg-background p-1 shadow-md select-none cursor-default"
+            ? "mb-2 flex w-max max-w-full flex-wrap items-center gap-0.5 rounded-md border bg-background p-1 shadow-sm select-none cursor-default"
             : "flex flex-wrap items-center gap-0.5 p-1 border-b bg-muted/40 shrink-0 select-none"
         }
         onMouseDown={(e) => e.preventDefault()}
