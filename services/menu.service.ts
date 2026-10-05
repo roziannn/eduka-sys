@@ -15,7 +15,7 @@ export type MenuPayload = {
   icon?: string | null
   // Nomor urut di sidebar (bilangan bulat >= 1), diurutkan di antara menu yang satu induk.
   // undefined/null/kosong = saat buat: otomatis paling akhir, saat edit: tidak diubah.
-  urutan?: unknown
+  seq?: unknown
   // undefined = button tidak disentuh. Terisi = daftar button final: [{ id?, code }]
   buttons?: unknown
 }
@@ -48,7 +48,7 @@ const MAX_NAMA = 100
 const MAX_URL = 255
 const MAX_BUTTONS = 30
 const MAX_BUTTON_CODE = 50
-const MAX_URUTAN = 9999
+const MAX_SEQ = 9999
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -106,13 +106,13 @@ function parseIcon(raw: unknown): string | null | undefined {
   return raw
 }
 
-function parseUrutan(raw: unknown): number | undefined {
+function parseSeq(raw: unknown): number | undefined {
   if (raw === undefined || raw === null || raw === "") return undefined
   const n = typeof raw === "string" ? Number(raw.trim()) : raw
-  if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > MAX_URUTAN) {
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > MAX_SEQ) {
     throw new ApiError(
       400,
-      `Urutan harus bilangan bulat antara 1 sampai ${MAX_URUTAN}`
+      `Urutan harus bilangan bulat antara 1 sampai ${MAX_SEQ}`
     )
   }
   return n
@@ -233,7 +233,7 @@ export const menuService = {
     // Ikon hanya untuk menu utama, dan boleh kosong
     const icon = parentId ? null : parseIcon(payload.icon) ?? null
 
-    const seq = parseUrutan(payload.urutan)
+    const seq = parseSeq(payload.seq)
 
     const buttons = parseButtons(payload.buttons)
     if (buttons?.some((b) => b.id !== null)) {
@@ -258,7 +258,7 @@ export const menuService = {
     // Ikon hanya bisa diubah di menu utama. Untuk sub menu, nilainya diabaikan.
     const icon = menu.parent_id === null ? parseIcon(payload.icon) : undefined
 
-    const seq = parseUrutan(payload.urutan)
+    const seq = parseSeq(payload.seq)
 
     const buttons = parseButtons(payload.buttons)
 
