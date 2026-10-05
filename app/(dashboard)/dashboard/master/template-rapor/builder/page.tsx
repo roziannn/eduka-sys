@@ -68,7 +68,7 @@ const JENIS_LABEL: Record<string, string> = {
   TENGAH_SEMESTER: "Rapor PTS",
 }
 
-// Editor teks di panel kanan: tanpa undo/redo, heading, tabel, gambar, dan rumus
+// Editor teks langsung di kotak canvas: tanpa undo/redo, heading, tabel, gambar, dan rumus
 // (gambar disimpan base64 sehingga membengkakkan JSON template)
 const TEXTBOX_EDITOR_FEATURES: RichTextFeatures = {
   history: false,
@@ -503,7 +503,9 @@ function TemplateBuilder() {
                 return (
                   <div
                     key={el.id}
-                    draggable
+                    // Text Box yang sedang diedit tidak bisa digeser dari kotaknya (menghalangi seleksi teks),
+                    // geser lewat handle di toolbar
+                    draggable={!(isSelected && el.type === "textbox")}
                     onDragStart={(e) => handleElementDragStart(e, el.id)}
                     onDragEnd={clearDrag}
                     onDragOver={(e) => handleElementDragOver(e, index)}
@@ -594,13 +596,35 @@ function TemplateBuilder() {
                       </div>
                     )}
 
-                    {el.type === "textbox" && (
-                      <div
-                        className={RICH_CONTENT_CLASS}
-                        // HTML berasal dari editor teks dan dibersihkan lagi oleh server saat disimpan
-                        dangerouslySetInnerHTML={{ __html: htmlOf(el) }}
-                      />
-                    )}
+                    {el.type === "textbox" &&
+                      (isSelected ? (
+                        // key = id elemen, supaya editor dimuat ulang saat pindah elemen
+                        <RichTextEditor
+                          key={el.id}
+                          floating
+                          value={htmlOf(el)}
+                          onChange={(html) => handleChangeHtml(el.id, html)}
+                          features={TEXTBOX_EDITOR_FEATURES}
+                          contentClassName={RICH_CONTENT_CLASS}
+                          toolbarLead={
+                            <div
+                              draggable
+                              onDragStart={(e) => handleElementDragStart(e, el.id)}
+                              onDragEnd={clearDrag}
+                              className="flex h-8 w-6 cursor-grab items-center justify-center text-muted-foreground active:cursor-grabbing"
+                              title="Geser elemen"
+                            >
+                              <GripVerticalIcon className="h-4 w-4" />
+                            </div>
+                          }
+                        />
+                      ) : (
+                        <div
+                          className={RICH_CONTENT_CLASS}
+                          // HTML berasal dari editor teks dan dibersihkan lagi oleh server saat disimpan
+                          dangerouslySetInnerHTML={{ __html: htmlOf(el) }}
+                        />
+                      ))}
 
                     {/* Action Bar Hover */}
                     <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
@@ -679,18 +703,9 @@ function TemplateBuilder() {
                   )}
 
                   {selectedElement.type === "textbox" && (
-                    <div>
-                      <Label className="text-xs">Isi Teks</Label>
-                      <div className="mt-1">
-                        {/* key = id elemen, supaya editor dimuat ulang saat pindah elemen */}
-                        <RichTextEditor
-                          key={selectedElement.id}
-                          value={htmlOf(selectedElement)}
-                          onChange={(html) => handleChangeHtml(selectedElement.id, html)}
-                          features={TEXTBOX_EDITOR_FEATURES}
-                        />
-                      </div>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Klik kotak teks di canvas untuk mengedit isinya langsung. Toolbar format muncul di atas kotak.
+                    </p>
                   )}
                 </div>
               ) : (
