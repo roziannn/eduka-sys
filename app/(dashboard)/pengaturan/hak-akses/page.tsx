@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Plus, Settings, Search, CheckCircle2, XCircle, Loader2, Edit } from "lucide-react"
+import { Plus, Settings, Search, CheckCircle2, XCircle, Loader2, Edit, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -48,6 +48,8 @@ export default function HakAksesPage() {
   const queryClient = useQueryClient()
 
   const [search, setSearch] = React.useState("")
+  const [page, setPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(5)
   const [openModal, setOpenModal] = React.useState(false)
   const [editingRole, setEditingRole] = React.useState<RoleUI | null>(null)
 
@@ -151,6 +153,11 @@ export default function HakAksesPage() {
     )
   }, [roles, search])
 
+  const totalPages = Math.ceil(filteredRoles.length / pageSize) || 1
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * pageSize
+  const paginatedRoles = filteredRoles.slice(startIndex, startIndex + pageSize)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -173,7 +180,7 @@ export default function HakAksesPage() {
           <Input
             placeholder="Cari nama role, kode, deskripsi..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             className="pl-8"
           />
         </div>
@@ -202,10 +209,10 @@ export default function HakAksesPage() {
                   </div>
                 </TableCell>
               </TableRow>
-            ) : filteredRoles.length ? (
-              filteredRoles.map((role, idx) => (
+            ) : paginatedRoles.length ? (
+              paginatedRoles.map((role, idx) => (
                 <TableRow key={role.id}>
-                  <TableCell className="font-mono text-xs">{idx + 1}</TableCell>
+                  <TableCell className="font-mono text-xs">{startIndex + idx + 1}</TableCell>
                   <TableCell>
                     <span className="font-semibold text-foreground">{role.namaRole}</span>
                   </TableCell>
@@ -257,6 +264,26 @@ export default function HakAksesPage() {
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination Footer */}
+        <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>Baris per halaman</span>
+            <Select value={String(pageSize)} onValueChange={(v) => { if (v) setPageSize(Number(v)); setPage(1) }}>
+              <SelectTrigger className="h-8 w-[65px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[5, 10, 20, 50].map((n) => (<SelectItem key={n} value={String(n)}>{n}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-4">
+            <span>Halaman {currentPage} dari {totalPages}</span>
+            <div className="flex gap-1">
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(Math.max(currentPage - 1, 1))} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(Math.min(currentPage + 1, totalPages))} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <Dialog open={openModal} onOpenChange={setOpenModal}>
