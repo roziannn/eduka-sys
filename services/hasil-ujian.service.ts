@@ -10,7 +10,11 @@ import type { SoalDb } from "@/types/soal-ujian"
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const ALASAN_RESET = ["remedial", "teknis", "kurang_maksimal"] as const
+// Alasan ujian ulang. Remedial punya alurnya sendiri (beriRemedial), bukan lewat reset.
+const ALASAN_RESET = ["teknis", "kurang_maksimal"] as const
+// Remedial maksimal per siswa per ujian. Nilai remedial dibatasi paling tinggi KKM (di database).
+const MAX_REMEDIAL = 2
+const MAX_CATATAN_REMEDIAL = 200
 const MAX_CATATAN = 1000
 
 const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null)
@@ -35,16 +39,34 @@ const formatUjian = (r: UjianHasilRow) => ({
   selesai: r.selesai,
   berjalan: r.berjalan,
   menunggu: r.menunggu,
+  perluRemedial: r.perlu_remedial,
   rataRata: r.rata_rata === null ? null : round2(r.rata_rata),
 })
 
 // Status untuk tabel guru:
-// Belum Dikerjakan | Sedang Mengerjakan | Menunggu Penilaian | Tuntas | Remedial
+// Belum Dikerjakan | Sedang Mengerjakan | Remedial Diizinkan | Menunggu Penilaian | Tuntas | Remedial
+// "Remedial" = nilai terbaik masih di bawah KKM (perlu remedial). Nilai yang dipakai adalah
+// nilai terbaik dari percobaan awal dan semua remedial.
 function statusPeserta(r: PesertaRow, kkm: number) {
   if (!r.percobaan_id) return "Belum Dikerjakan"
   if (r.status === "Berjalan") return "Sedang Mengerjakan"
-  if (r.status_nilai !== "Final" || r.nilai_akhir === null) return "Menunggu Penilaian"
-  return r.nilai_akhir >= kkm ? "Tuntas" : "Remedial"
+  if (r.izin_menunggu_ke !== null) return "Remedial Diizinkan"
+  if (r.status_nilai !== "Final" || r.nilai_final === null) return "Menunggu Penilaian"
+  return r.nilai_final >= kkm ? "Tuntas" : "Remedial"
+}
+
+// Remedial boleh diberikan kalau percobaan terakhir sudah final, nilai terbaik masih di bawah KKM,
+// belum ada izin yang menunggu, dan kuota belum habis
+function bisaRemedial(r: PesertaRow, kkm: number) {
+  return (
+    r.percobaan_id !== null &&
+    r.status === "Selesai" &&
+    r.status_nilai === "Final" &&
+    r.izin_menunggu_ke === null &&
+    r.nilai_final !== null &&
+    r.nilai_final < kkm &&
+    r.remedial_dipakai < MAX_REMEDIAL
+  )
 }
 
 export const hasilUjianService = {
@@ -66,9 +88,16 @@ export const hasilUjianService = {
       kelas: r.kelas,
       percobaanId: r.percobaan_id,
       status: statusPeserta(r, header.nilai_kkm),
-      nilai: r.nilai_akhir,
+      nilai: r.nilai_final,
+      remedialDipakai: r.remedial_dipakai,
+      sisaRemedial: Math.max(0, MAX_REMEDIAL - r.remedial_dipakai),
+      bisaRemedial: bisaRemedial(r, header.nilai_kkm),
+      izinMenunggu: r.izin_menunggu_ke !== null,
+      // Ujian ulang hanya untuk percobaan terakhir, dan tidak saat izin remedial sedang menunggu
+      bisaUjianUlang: r.percobaan_id !== null && r.izin_menunggu_ke === null,
       mulai: iso(r.started_at),
       selesai: iso(r.submitted_at),
+      riwayat: r.riwayat,
     }))
 
     return {
@@ -80,6 +109,7 @@ export const hasilUjianService = {
         kkm: header.nilai_kkm,
         tahunAjaran: header.tahun_ajaran,
         semester: header.semester,
+        maxRemedial: MAX_REMEDIAL,
       },
       kelas: [...new Set(peserta.map((p) => p.kelas))],
       peserta,
@@ -130,6 +160,9 @@ export const hasilUjianService = {
       skorEssai: p.skor_essai,
       skorMaks: p.skor_maks,
       nilaiAkhir: p.nilai_akhir,
+      nilaiTercatat: p.nilai_tercatat,
+      jenis: p.jenis,
+      remedialKe: p.remedial_ke,
       kkm: p.nilai_kkm,
       mulai: iso(p.started_at),
       selesai: iso(p.submitted_at),
@@ -185,7 +218,67 @@ export const hasilUjianService = {
     const alasan = ALASAN_RESET.find((a) => a === body.alasan)
     if (!alasan) throw new ApiError(400, "Alasan ujian ulang tidak valid")
 
-    const done = await hasilUjianRepository.resetPercobaan(percobaanId, alasan, actorId)
-    if (!done) throw new ApiError(404, "Percobaan aktif tidak ditemukan")
+    const hasil = await hasilUjianRepository.resetPercobaan(percobaanId, alasan, actorId)
+    if (hasil === "tidak-ada") throw new ApiError(404, "Percobaan aktif tidak ditemukan")
+    if (hasil === "bukan-terakhir") {
+      throw new ApiError(409, "Hanya percobaan terakhir siswa yang bisa direset")
+    }
+  },
+
+  // Guru mengizinkan remedial. Siswa memakainya dengan memasukkan token dan menekan Mulai Remedial.
+  async beriRemedial(
+    ujianId: string,
+    body: { userId?: unknown; catatan?: unknown },
+    actorId: string
+  ) {
+    requireUuid(ujianId, "Ujian tidak ditemukan")
+    if (typeof body.userId !== "string" || !UUID_RE.test(body.userId)) {
+      throw new ApiError(400, "Siswa tidak valid")
+    }
+
+    const header = await hasilUjianRepository.findUjianHeader(ujianId)
+    if (!header) throw new ApiError(404, "Ujian tidak ditemukan")
+
+    let catatan: string | null = null
+    if (body.catatan !== undefined && body.catatan !== null && body.catatan !== "") {
+      if (typeof body.catatan !== "string" || body.catatan.length > MAX_CATATAN_REMEDIAL) {
+        throw new ApiError(400, `Catatan maksimal ${MAX_CATATAN_REMEDIAL} karakter`)
+      }
+      catatan = body.catatan.trim() || null
+    }
+
+    const st = await hasilUjianRepository.findStatusRemedial(ujianId, body.userId)
+    if (!st.terakhir) throw new ApiError(409, "Siswa belum mengerjakan ujian ini")
+    if (st.terakhir.status !== "Selesai") {
+      throw new ApiError(409, "Siswa masih mengerjakan ujian ini")
+    }
+    if (st.terakhir.status_nilai !== "Final" || st.nilaiFinal === null) {
+      throw new ApiError(409, "Nilai siswa belum final. Nilai dulu soal essainya.")
+    }
+    if (st.nilaiFinal >= header.nilai_kkm) {
+      throw new ApiError(409, "Nilai siswa sudah mencapai KKM, remedial tidak diperlukan")
+    }
+    if (st.menunggu > 0) throw new ApiError(409, "Siswa sudah punya izin remedial yang belum dipakai")
+    if (st.dipakai >= MAX_REMEDIAL) {
+      throw new ApiError(409, `Kesempatan remedial sudah habis (maksimal ${MAX_REMEDIAL} kali)`)
+    }
+
+    await hasilUjianRepository.beriRemedial(
+      ujianId,
+      body.userId,
+      st.terakhir.remedial_ke + 1,
+      catatan,
+      actorId
+    )
+  },
+
+  // Hanya izin yang belum dipakai siswa. Kuota remedial kembali.
+  async batalkanRemedial(ujianId: string, body: { userId?: unknown }) {
+    requireUuid(ujianId, "Ujian tidak ditemukan")
+    if (typeof body.userId !== "string" || !UUID_RE.test(body.userId)) {
+      throw new ApiError(400, "Siswa tidak valid")
+    }
+    const done = await hasilUjianRepository.batalkanRemedial(ujianId, body.userId)
+    if (!done) throw new ApiError(404, "Tidak ada izin remedial yang menunggu")
   },
 }

@@ -38,6 +38,7 @@ interface UjianHasil {
   selesai: number
   berjalan: number
   menunggu: number
+  perluRemedial: number
   rataRata: number | null
 }
 
@@ -183,6 +184,11 @@ export default function HasilUjianPage() {
                     {item.menunggu > 0 && (
                       <Badge variant="outline" className="mt-1 border-amber-300 text-[10px] text-amber-600">
                         {item.menunggu} menunggu penilaian
+                      </Badge>
+                    )}
+                    {item.perluRemedial > 0 && (
+                      <Badge variant="outline" className="mt-1 block w-fit border-violet-300 text-[10px] text-violet-600">
+                        {item.perluRemedial} perlu remedial
                       </Badge>
                     )}
                   </TableCell>

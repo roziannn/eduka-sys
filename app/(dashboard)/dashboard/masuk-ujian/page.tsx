@@ -192,7 +192,9 @@ function UjianRunner({
   onUpdate: (result: MasukUjianResult) => void
   onExit: () => void
 }) {
-  const { ujian, percobaan } = masuk
+  const { ujian, percobaan, remedialTersedia } = masuk
+  // Remedial dimulai lewat layar konfirmasi dulu, supaya timer tidak jalan karena salah klik
+  const [konfirmasiRemedial, setKonfirmasiRemedial] = React.useState(false)
 
   const mulaiMutation = useMutation({
     mutationFn: () =>
@@ -200,7 +202,10 @@ function UjianRunner({
         method: "POST",
         body: { token },
       }),
-    onSuccess: onUpdate,
+    onSuccess: (result) => {
+      setKonfirmasiRemedial(false)
+      onUpdate(result)
+    },
     onError: (err) => toast.error(`Gagal memulai ujian: ${getErrorMessage(err)}`),
   })
 
@@ -216,11 +221,31 @@ function UjianRunner({
   }
 
   if (percobaan.status === "Selesai") {
-    return <Selesai ujian={ujian} percobaan={percobaan} onExit={onExit} />
+    if (remedialTersedia && konfirmasiRemedial) {
+      return (
+        <Konfirmasi
+          ujian={ujian}
+          remedialKe={remedialTersedia.ke}
+          memulai={mulaiMutation.isPending}
+          onBatal={() => setKonfirmasiRemedial(false)}
+          onMulai={() => mulaiMutation.mutate()}
+        />
+      )
+    }
+    return (
+      <Selesai
+        ujian={ujian}
+        percobaan={percobaan}
+        remedialKe={remedialTersedia?.ke ?? null}
+        onRemedial={() => setKonfirmasiRemedial(true)}
+        onExit={onExit}
+      />
+    )
   }
 
   return (
     <Pengerjaan
+      key={percobaan.id}
       ujian={ujian}
       percobaan={percobaan}
       offset={offset}
@@ -231,11 +256,14 @@ function UjianRunner({
 
 function Konfirmasi({
   ujian,
+  remedialKe,
   memulai,
   onMulai,
   onBatal,
 }: {
   ujian: UjianSiswa
+  // Terisi kalau ini remedial
+  remedialKe?: number
   memulai: boolean
   onMulai: () => void
   onBatal: () => void
@@ -251,10 +279,21 @@ function Konfirmasi({
                 Mata Pelajaran: <span className="font-semibold text-foreground">{ujian.mataPelajaran}</span>
               </p>
             </div>
-            <Badge variant="outline">{ujian.jenis}</Badge>
+            <div className="flex flex-col items-end gap-1">
+              <Badge variant="outline">{ujian.jenis}</Badge>
+              {remedialKe !== undefined && (
+                <Badge className="bg-amber-500 hover:bg-amber-500">Remedial ke-{remedialKe}</Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {remedialKe !== undefined && (
+            <p className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+              Nilai remedial paling tinggi sama dengan KKM. Nilai akhir Anda adalah yang terbaik
+              antara ujian pertama dan remedial.
+            </p>
+          )}
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
               <span className="block text-xs text-muted-foreground">Durasi</span>
@@ -285,7 +324,13 @@ function Konfirmasi({
         <div className="flex justify-end gap-2 px-6 pb-6">
           <Button variant="outline" onClick={onBatal} disabled={memulai}>Batal</Button>
           <Button onClick={onMulai} disabled={ujian.soal.length === 0 || memulai}>
-            {memulai ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memulai...</> : "Mulai Ujian"}
+            {memulai ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memulai...</>
+            ) : remedialKe !== undefined ? (
+              "Mulai Remedial"
+            ) : (
+              "Mulai Ujian"
+            )}
           </Button>
         </div>
       </Card>
@@ -700,10 +745,15 @@ function Pengerjaan({
 function Selesai({
   ujian,
   percobaan,
+  remedialKe,
+  onRemedial,
   onExit,
 }: {
   ujian: UjianSiswa
   percobaan: PercobaanSiswa
+  // Terisi kalau guru sudah mengizinkan remedial dan belum dipakai
+  remedialKe: number | null
+  onRemedial: () => void
   onExit: () => void
 }) {
   const terjawab = ujian.soal.filter((s) => isTerjawab(s, percobaan.jawaban)).length
@@ -716,7 +766,9 @@ function Selesai({
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600/10 text-emerald-600">
             <CheckCircle2 className="h-6 w-6" />
           </div>
-          <CardTitle className="text-xl">Ujian Selesai</CardTitle>
+          <CardTitle className="text-xl">
+            {percobaan.hasil?.jenis === "Remedial" ? `Remedial ke-${percobaan.hasil.remedialKe} Selesai` : "Ujian Selesai"}
+          </CardTitle>
           <p className="text-sm text-muted-foreground">{ujian.nama}</p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -730,6 +782,16 @@ function Selesai({
               Jawaban Anda sudah dikumpulkan. Hasil ujian ini tidak ditampilkan langsung,
               nilai akan disampaikan oleh guru.
             </p>
+          )}
+
+          {remedialKe !== null && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-left text-sm dark:border-amber-800 dark:bg-amber-950/30">
+              <p className="font-semibold text-amber-800 dark:text-amber-400">Remedial ke-{remedialKe} tersedia</p>
+              <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-400/80">
+                Guru mengizinkan Anda mengulang ujian ini. Nilai remedial paling tinggi sama dengan KKM.
+              </p>
+              <Button className="mt-3 w-full" onClick={onRemedial}>Mulai Remedial</Button>
+            </div>
           )}
 
           <Button variant="outline" onClick={onExit}>Kembali</Button>
@@ -758,7 +820,7 @@ function HasilSiswa({ hasil }: { hasil: HasilUjian }) {
           </>
         ) : (
           <>
-            <p className="text-4xl font-extrabold text-primary">{hasil.nilaiAkhir}</p>
+            <p className="text-4xl font-extrabold text-primary">{hasil.nilaiTercatat}</p>
             <div className="mt-1 flex items-center justify-center gap-2">
               {hasil.tuntas !== null && (
                 <Badge className={hasil.tuntas ? "bg-emerald-600 hover:bg-emerald-600" : "bg-destructive hover:bg-destructive"}>
@@ -771,6 +833,17 @@ function HasilSiswa({ hasil }: { hasil: HasilUjian }) {
               {hasil.skorPg + hasil.skorEssai} dari {hasil.skorMaks} poin
               {hasil.adaEssai && ` (pilihan ganda ${hasil.skorPg}, essai ${hasil.skorEssai})`}
             </p>
+            {hasil.jenis === "Remedial" && hasil.nilaiAkhir !== null && hasil.nilaiAkhir > (hasil.nilaiTercatat ?? 0) && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Nilai remedial dibatasi paling tinggi sama dengan KKM ({hasil.kkm}).
+              </p>
+            )}
+            {hasil.nilaiFinal !== null && (
+              <p className="mt-2 text-xs">
+                Nilai terbaik Anda untuk ujian ini:{" "}
+                <span className="font-bold text-foreground">{hasil.nilaiFinal}</span>
+              </p>
+            )}
           </>
         )}
       </div>
