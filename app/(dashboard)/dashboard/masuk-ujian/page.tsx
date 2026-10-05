@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog"
 import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
 import type {
+  HasilUjian,
   JawabanSiswa,
   MasukUjianResult,
   PercobaanSiswa,
@@ -710,7 +711,7 @@ function Selesai({
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="w-full max-w-md border text-center shadow-sm">
+      <Card className="w-full max-w-lg border text-center shadow-sm">
         <CardHeader>
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600/10 text-emerald-600">
             <CheckCircle2 className="h-6 w-6" />
@@ -724,25 +725,98 @@ function Selesai({
             <span className="font-semibold">{ujian.soal.length}</span> soal terjawab.
           </p>
 
-          {hasil ? (
-            <div className="rounded-md border bg-muted/30 p-3 text-sm">
-              <p className="text-xs text-muted-foreground">Skor Pilihan Ganda</p>
-              <p className="text-2xl font-bold text-primary">
-                {hasil.skorPg} <span className="text-base font-medium text-muted-foreground">/ {hasil.skorMaks}</span>
-              </p>
-              {hasil.adaEssai && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Soal essai dinilai oleh guru, jadi skor akhir bisa berubah.
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">Jawaban Anda sudah dikumpulkan.</p>
+          {hasil ? <HasilSiswa hasil={hasil} /> : (
+            <p className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+              Jawaban Anda sudah dikumpulkan. Hasil ujian ini tidak ditampilkan langsung,
+              nilai akan disampaikan oleh guru.
+            </p>
           )}
 
           <Button variant="outline" onClick={onExit}>Kembali</Button>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+// Nilai akhir, ringkasan skor, dan benar atau salah tiap soal (tanpa kunci jawaban)
+function HasilSiswa({ hasil }: { hasil: HasilUjian }) {
+  const menunggu = hasil.statusNilai === "Menunggu"
+
+  return (
+    <div className="space-y-3 text-left">
+      <div className="rounded-md border bg-muted/30 p-4 text-center">
+        <p className="text-xs text-muted-foreground">Nilai Akhir</p>
+        {menunggu ? (
+          <>
+            <p className="text-lg font-bold text-amber-600">Menunggu penilaian guru</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Soal essai belum dinilai. Skor pilihan ganda sementara:{" "}
+              <span className="font-semibold text-foreground">{hasil.skorPg}</span> dari{" "}
+              {hasil.skorMaks} poin.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-4xl font-extrabold text-primary">{hasil.nilaiAkhir}</p>
+            <div className="mt-1 flex items-center justify-center gap-2">
+              {hasil.tuntas !== null && (
+                <Badge className={hasil.tuntas ? "bg-emerald-600 hover:bg-emerald-600" : "bg-destructive hover:bg-destructive"}>
+                  {hasil.tuntas ? "Tuntas" : "Belum Tuntas"}
+                </Badge>
+              )}
+              <span className="text-xs text-muted-foreground">KKM {hasil.kkm}</span>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {hasil.skorPg + hasil.skorEssai} dari {hasil.skorMaks} poin
+              {hasil.adaEssai && ` (pilihan ganda ${hasil.skorPg}, essai ${hasil.skorEssai})`}
+            </p>
+          </>
+        )}
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold text-muted-foreground">Hasil per soal</p>
+        <div className="grid grid-cols-6 gap-2 sm:grid-cols-8">
+          {hasil.rincian.map((r, i) => {
+            const warna =
+              r.isBenar === true
+                ? "border-emerald-600 bg-emerald-600 text-white"
+                : r.isBenar === false
+                ? "border-destructive bg-destructive text-white"
+                : r.nilai === null
+                ? "border-amber-400 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+                : r.nilai >= r.bobot
+                ? "border-emerald-600 bg-emerald-600 text-white"
+                : r.nilai > 0
+                ? "border-amber-500 bg-amber-500 text-white"
+                : "border-destructive bg-destructive text-white"
+            const arti =
+              r.isBenar === true
+                ? "Benar"
+                : r.isBenar === false
+                ? "Salah"
+                : r.nilai === null
+                ? "Menunggu penilaian"
+                : `Nilai ${r.nilai} dari ${r.bobot}`
+            return (
+              <div
+                key={r.soalId}
+                className={`flex h-9 items-center justify-center rounded-md border text-xs font-semibold ${warna}`}
+                title={`Soal ${i + 1}: ${arti}`}
+              >
+                {i + 1}
+              </div>
+            )
+          })}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-emerald-600" /> Benar / nilai penuh</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-destructive" /> Salah / nilai 0</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-amber-500" /> Nilai sebagian</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded border border-amber-400 bg-amber-100" /> Menunggu guru</span>
+        </div>
+      </div>
     </div>
   )
 }

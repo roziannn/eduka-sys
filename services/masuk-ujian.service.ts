@@ -1,6 +1,8 @@
 import { ApiError } from "@/lib/api"
 import {
   masukUjianRepository,
+  type HasilRow,
+  type JawabanFinal,
   type JawabanItem,
   type PercobaanRow,
   type UjianByToken,
@@ -35,11 +37,28 @@ export interface UjianSiswa {
 
 export type JawabanSiswa = Record<string, string[] | string>
 
+// Rincian per soal. isBenar null = essai (dinilai guru), nilai null = belum dinilai.
+// Kunci jawaban sengaja tidak ikut: siswa hanya tahu benar atau salah.
+export interface RincianSoal {
+  soalId: string
+  tipe: "PG" | "ESSAI"
+  bobot: number
+  isBenar: boolean | null
+  nilai: number | null
+}
+
 // Hanya diisi kalau ujian diatur menampilkan hasil
 export interface HasilUjian {
   skorPg: number
+  skorEssai: number
   skorMaks: number
   adaEssai: boolean
+  // Menunggu = masih ada essai yang belum dinilai guru, nilai akhir belum ada
+  statusNilai: "Final" | "Menunggu"
+  nilaiAkhir: number | null
+  kkm: number
+  tuntas: boolean | null
+  rincian: RincianSoal[]
 }
 
 export interface PercobaanSiswa {
@@ -67,6 +86,8 @@ const MAX_ESSAI_LENGTH = 20000
 // Toleransi keterlambatan (detik) untuk jawaban yang masih di perjalanan saat waktu habis
 const GRACE_SIMPAN = 10
 const GRACE_KUMPUL = 30
+// Token salah yang diizinkan per user sebelum diblokir sementara (jendela waktunya di repository)
+const MAX_TOKEN_GAGAL = 5
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -118,30 +139,42 @@ function parseJawaban(soal: SoalDb, raw: unknown): string[] | string {
   return raw
 }
 
-// Pilihan ganda benar kalau pilihan siswa persis sama dengan semua opsi yang benar (tanpa nilai sebagian)
-function hitungSkor(soalList: SoalDb[], jawaban: Map<string, string[] | string>) {
-  let skorPg = 0
-  let skorMaks = 0
-  let adaEssai = false
+// Satu baris nilai per soal. Pilihan ganda benar kalau pilihan siswa persis sama dengan semua
+// opsi yang benar (tanpa nilai sebagian). Essai menunggu guru, kecuali dikosongkan: langsung 0.
+function nilaiPerSoal(
+  soalList: SoalDb[],
+  jawaban: Map<string, string[] | string>
+): JawabanFinal[] {
+  return soalList.map((s): JawabanFinal => {
+    const value = jawaban.get(s.id)
 
-  for (const s of soalList) {
-    skorMaks += s.bobot
-    if (s.tipe !== "PG") {
-      adaEssai = true
-      continue
+    if (s.tipe === "PG") {
+      const pilihan = Array.isArray(value) ? value : []
+      const kunci = new Set((s.opsi ?? []).filter((o) => o.benar).map((o) => o.id))
+      const benar =
+        kunci.size > 0 &&
+        pilihan.length === kunci.size &&
+        pilihan.every((id) => kunci.has(id))
+      return {
+        soalId: s.id,
+        jawaban: pilihan,
+        tipe: "PG",
+        bobot: s.bobot,
+        isBenar: benar,
+        nilai: benar ? s.bobot : 0,
+      }
     }
-    const kunci = new Set((s.opsi ?? []).filter((o) => o.benar).map((o) => o.id))
-    const pilihan = jawaban.get(s.id)
-    if (
-      kunci.size > 0 &&
-      Array.isArray(pilihan) &&
-      pilihan.length === kunci.size &&
-      pilihan.every((id) => kunci.has(id))
-    ) {
-      skorPg += s.bobot
+
+    const teks = typeof value === "string" ? value : ""
+    return {
+      soalId: s.id,
+      jawaban: teks,
+      tipe: "ESSAI",
+      bobot: s.bobot,
+      isBenar: null,
+      nilai: teks.trim() === "" ? 0 : null,
     }
-  }
-  return { skorPg, skorMaks, adaEssai }
+  })
 }
 
 // Token harus berlaku dan ujian sedang dibuka. Siswa hanya bisa ikut ujian untuk kelasnya;
@@ -149,10 +182,29 @@ function hitungSkor(soalList: SoalDb[], jawaban: Map<string, string[] | string>)
 async function resolveUjian(rawToken: unknown, user: Actor): Promise<UjianByToken> {
   const token = typeof rawToken === "string" ? rawToken.trim().toUpperCase() : ""
   if (!token) throw new ApiError(400, "Token wajib diisi")
-  if (!/^[A-Z0-9]{4,12}$/.test(token)) throw new ApiError(404, "Token tidak ditemukan")
 
-  const ujian = await masukUjianRepository.findByToken(token)
-  if (!ujian) throw new ApiError(404, "Token tidak ditemukan")
+  // Terlalu banyak token salah: tolak dulu, supaya token tidak bisa ditebak berulang-ulang
+  const gagal = await masukUjianRepository.hitungTokenGagal(user.id)
+  if (gagal.jumlah >= MAX_TOKEN_GAGAL) {
+    throw new ApiError(
+      429,
+      `Terlalu banyak token salah. Coba lagi dalam ${gagal.menitTunggu} menit.`
+    )
+  }
+
+  const ujian = /^[A-Z0-9]{4,12}$/.test(token)
+    ? await masukUjianRepository.findByToken(token)
+    : null
+  if (!ujian) {
+    await masukUjianRepository.catatTokenGagal(user.id)
+    const sisa = MAX_TOKEN_GAGAL - gagal.jumlah - 1
+    throw new ApiError(
+      404,
+      sisa > 0
+        ? `Token tidak ditemukan. Sisa percobaan: ${sisa}.`
+        : "Token tidak ditemukan. Percobaan habis, coba lagi beberapa menit lagi."
+    )
+  }
 
   if (ujian.status !== "Siap Ujian" || !ujian.is_open) {
     throw new ApiError(403, "Ujian belum dibuka atau sudah ditutup")
@@ -169,8 +221,9 @@ async function resolveUjian(rawToken: unknown, user: Actor): Promise<UjianByToke
   return ujian
 }
 
-// Menutup percobaan dengan jawaban yang sudah tersimpan (+ jawaban terakhir kalau ada).
-// Dipakai saat siswa mengumpulkan dan saat percobaan ditemukan sudah lewat batas waktu.
+// Menutup percobaan dengan jawaban yang sudah tersimpan (+ jawaban terakhir kalau ada),
+// lalu menilai tiap soal. Dipakai saat siswa mengumpulkan dan saat percobaan ditemukan
+// sudah lewat batas waktu.
 async function tutupPercobaan(
   percobaan: PercobaanRow,
   data: { data_json: { soal: SoalDb[] } },
@@ -179,8 +232,24 @@ async function tutupPercobaan(
   const tersimpan = await masukUjianRepository.findJawaban(percobaan.id)
   for (const item of extra) tersimpan.set(item.soalId, item.jawaban)
 
-  const { skorPg, skorMaks } = hitungSkor(data.data_json.soal, tersimpan)
-  await masukUjianRepository.finalize(percobaan.id, extra, skorPg, skorMaks)
+  await masukUjianRepository.finalize(
+    percobaan.id,
+    nilaiPerSoal(sortedSoal(data.data_json.soal), tersimpan)
+  )
+}
+
+function toRincian(rows: HasilRow[], soalList: SoalDb[]): RincianSoal[] {
+  const bySoal = new Map(rows.map((r) => [r.soal_id, r]))
+  return sortedSoal(soalList).map((s) => {
+    const r = bySoal.get(s.id)
+    return {
+      soalId: s.id,
+      tipe: s.tipe,
+      bobot: s.bobot,
+      isBenar: r?.is_benar ?? null,
+      nilai: r?.nilai ?? null,
+    }
+  })
 }
 
 async function bangunHasil(
@@ -204,6 +273,21 @@ async function bangunHasil(
   const selesai = row.status === "Selesai"
   const adaEssai = data.data_json.soal.some((s) => s.tipe !== "PG")
 
+  let hasil: HasilUjian | null = null
+  if (selesai && data.tampilkan_hasil && row.status_nilai) {
+    hasil = {
+      skorPg: row.skor_pg ?? 0,
+      skorEssai: row.skor_essai ?? 0,
+      skorMaks: row.skor_maks ?? 0,
+      adaEssai,
+      statusNilai: row.status_nilai,
+      nilaiAkhir: row.nilai_akhir,
+      kkm: data.nilai_kkm,
+      tuntas: row.nilai_akhir === null ? null : row.nilai_akhir >= data.nilai_kkm,
+      rincian: toRincian(await masukUjianRepository.findHasilRows(row.id), data.data_json.soal),
+    }
+  }
+
   return {
     serverNow: row.now_ms,
     percobaan: {
@@ -213,10 +297,7 @@ async function bangunHasil(
       status: row.status,
       order: row.urutan_soal,
       jawaban: Object.fromEntries(jawaban),
-      hasil:
-        selesai && data.tampilkan_hasil && row.skor_pg !== null && row.skor_maks !== null
-          ? { skorPg: row.skor_pg, skorMaks: row.skor_maks, adaEssai }
-          : null,
+      hasil,
     },
   }
 }
