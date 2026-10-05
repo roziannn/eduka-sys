@@ -1,11 +1,12 @@
 import { ApiError } from "@/lib/api"
+import type { SessionAccess } from "@/lib/auth"
 import { roleRepository } from "@/repositories/role.repository"
 import {
   roleMenuRepository,
   type FunctionAccessInput,
   type MenuAccessInput,
 } from "@/repositories/role-menu.repository"
-import { menuService } from "@/services/menu.service"
+import { menuService, type MenuDto } from "@/services/menu.service"
 
 export type RoleAccessPayload = {
   // Id menu dan sub menu yang diizinkan
@@ -62,46 +63,80 @@ async function requireRole(roleId: string) {
   return role
 }
 
+// Semua menu, sub menu, dan button beserta status izin milik role ini
+async function loadMatrix(
+  roleId: string,
+  tree: MenuDto[]
+): Promise<MenuAccessDto[]> {
+  const rows = await roleMenuRepository.findByRole(roleId)
+
+  const menuOn = new Set<string>()
+  const buttonOn = new Set<string>()
+  for (const r of rows) {
+    if (r.function_id === null) {
+      if (r.is_active) menuOn.add(r.menu_id)
+    } else if (r.is_active_btn) {
+      buttonOn.add(r.function_id)
+    }
+  }
+
+  return tree.map((m) => ({
+    id: m.id,
+    namaMenu: m.namaMenu,
+    iconName: m.iconName,
+    url: m.url,
+    enabled: menuOn.has(m.id),
+    subMenus: m.subMenus.map((s) => ({
+      id: s.id,
+      namaSubMenu: s.namaSubMenu,
+      url: s.url,
+      enabled: menuOn.has(s.id),
+      buttons: s.buttons.map((b) => ({
+        id: b.id,
+        code: b.code,
+        enabled: buttonOn.has(b.id),
+      })),
+    })),
+  }))
+}
+
 export const roleAccessService = {
-  // Semua menu, sub menu, dan button, lengkap dengan status izin milik role ini
   async get(roleId: string) {
     const role = await requireRole(roleId)
+    return { role, menus: await loadMatrix(roleId, await menuService.list()) }
+  },
 
-    const [tree, rows] = await Promise.all([
-      menuService.list(),
-      roleMenuRepository.findByRole(roleId),
-    ])
+  // Yang boleh dilihat role ini saja, untuk disimpan di sesi saat login.
+  // Menu atau sub menu yang dinonaktifkan di pengaturan menu ikut dibuang.
+  async forSession(roleId: string): Promise<SessionAccess> {
+    const tree = await menuService.list()
+    const matrix = await loadMatrix(roleId, tree)
 
-    const menuOn = new Set<string>()
-    const buttonOn = new Set<string>()
-    for (const r of rows) {
-      if (r.function_id === null) {
-        if (r.is_active) menuOn.add(r.menu_id)
-      } else if (r.is_active_btn) {
-        buttonOn.add(r.function_id)
-      }
+    const inactive = new Set<string>()
+    for (const m of tree) {
+      if (!m.isAktif) inactive.add(m.id)
+      for (const s of m.subMenus) if (!s.isAktif) inactive.add(s.id)
     }
 
-    const menus: MenuAccessDto[] = tree.map((m) => ({
-      id: m.id,
-      namaMenu: m.namaMenu,
-      iconName: m.iconName,
-      url: m.url,
-      enabled: menuOn.has(m.id),
-      subMenus: m.subMenus.map((s) => ({
-        id: s.id,
-        namaSubMenu: s.namaSubMenu,
-        url: s.url,
-        enabled: menuOn.has(s.id),
-        buttons: s.buttons.map((b) => ({
-          id: b.id,
-          code: b.code,
-          enabled: buttonOn.has(b.id),
-        })),
-      })),
-    }))
+    const menus: SessionAccess["menus"] = []
+    for (const m of matrix) {
+      if (!m.enabled || inactive.has(m.id)) continue
 
-    return { role, menus }
+      const subs = m.subMenus
+        .filter((s) => s.enabled && !inactive.has(s.id))
+        .map((s) => ({
+          name: s.namaSubMenu,
+          url: s.url,
+          fns: s.buttons.filter((b) => b.enabled).map((b) => b.code),
+        }))
+
+      // Menu utama yang semua sub menunya tidak diizinkan tidak ditampilkan
+      if (m.subMenus.length > 0 && subs.length === 0) continue
+
+      menus.push({ name: m.namaMenu, url: m.url, icon: m.iconName, subs })
+    }
+
+    return { menus }
   },
 
   // Daftar yang dikirim = yang diizinkan, sisanya otomatis tidak diizinkan.

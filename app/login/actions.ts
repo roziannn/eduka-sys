@@ -5,9 +5,11 @@ import { redirect } from 'next/navigation'
 import bcrypt from 'bcryptjs'
 import { queryOne, query } from '@/lib/db'
 import { createSession, destroySession } from '@/lib/auth'
+import { roleAccessService } from '@/services/role-access.service'
 
 type UserRow = {
   id: string
+  role_id: string
   email: string
   password_hash: string
   is_active: boolean
@@ -31,7 +33,7 @@ export async function login(formData: FormData) {
   }
 
   const user = await queryOne<UserRow>(
-    `SELECT u.id, u.email, u.password_hash, u.is_active,
+    `SELECT u.id, u.role_id, u.email, u.password_hash, u.is_active,
             r.name AS role_name, r.normalized_name AS role_normalized
      FROM "CORE_User" u
      JOIN "CORE_Role" r ON r.id = u.role_id
@@ -62,11 +64,20 @@ export async function login(formData: FormData) {
     [user.id]
   )
 
-  await createSession({
-    userId: user.id,
-    email: user.email,
-    role: user.role_normalized,
-  })
+  try {
+    // Daftar menu dan button yang boleh dipakai ikut disimpan di sesi
+    const access = await roleAccessService.forSession(user.role_id)
+
+    await createSession({
+      userId: user.id,
+      email: user.email,
+      role: user.role_normalized,
+      access,
+    })
+  } catch (err) {
+    console.error(err)
+    return { error: 'Gagal memuat hak akses, hubungi administrator' }
+  }
 
   revalidatePath('/', 'layout')
   redirect('/dashboard')

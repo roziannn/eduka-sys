@@ -1,5 +1,5 @@
 import { cache } from "react"
-import { getSession } from "@/lib/auth"
+import { getSession, type SessionAccess } from "@/lib/auth"
 import { queryOne } from "@/lib/db"
 
 export type CurrentUser = {
@@ -8,6 +8,8 @@ export type CurrentUser = {
   email: string
   avatar: string
   role: string
+  // Menu dan button yang boleh dipakai, diambil dari sesi saat login
+  access: SessionAccess
 }
 
 type Row = {
@@ -42,5 +44,6 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     email: row.email,
     avatar: "/avatars/admin.jpg", // belum ada kolom avatar di CORE_User
     role: row.role,
+    access: session.access,
   }
 })
