@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg"
 import { query, queryOne, withTransaction } from "@/lib/db"
 import type { UjianDataJson } from "@/types/soal-ujian"
 
@@ -21,7 +22,10 @@ export type PercobaanRow = {
   status: "Berjalan" | "Selesai"
   urutan_soal: string[]
   skor_pg: number | null
+  skor_essai: number | null
   skor_maks: number | null
+  nilai_akhir: number | null
+  status_nilai: "Final" | "Menunggu" | null
   started_ms: number
   deadline_ms: number
   now_ms: number // jam database, dipakai untuk semua perhitungan waktu
@@ -29,9 +33,29 @@ export type PercobaanRow = {
 
 export type JawabanItem = { soalId: string; jawaban: string[] | string }
 
+// Satu baris per soal saat dikumpulkan. nilai null = essai yang menunggu guru.
+export type JawabanFinal = {
+  soalId: string
+  jawaban: string[] | string
+  tipe: "PG" | "ESSAI"
+  bobot: number
+  isBenar: boolean | null
+  nilai: number | null
+}
+
+export type HasilRow = {
+  soal_id: string
+  tipe: "PG" | "ESSAI"
+  bobot: number
+  is_benar: boolean | null
+  nilai: number | null
+}
+
 // Jam yang dibandingkan selalu jam database supaya konsisten dengan deadline_at
 const PERCOBAAN_COLS = `p.id, p.soal_ujian_id, p.status, p.urutan_soal,
-  p.skor_pg::float8 AS skor_pg, p.skor_maks::float8 AS skor_maks,
+  p.skor_pg::float8 AS skor_pg, p.skor_essai::float8 AS skor_essai,
+  p.skor_maks::float8 AS skor_maks, p.nilai_akhir::float8 AS nilai_akhir,
+  p.status_nilai,
   (EXTRACT(EPOCH FROM p.started_at) * 1000)::float8 AS started_ms,
   (EXTRACT(EPOCH FROM p.deadline_at) * 1000)::float8 AS deadline_ms,
   (EXTRACT(EPOCH FROM NOW()) * 1000)::float8 AS now_ms`
@@ -44,6 +68,36 @@ const UPSERT_JAWABAN = `INSERT INTO "TRN_JawabanUjian" (percobaan_id, soal_id, j
   )
   ON CONFLICT (percobaan_id, soal_id)
   DO UPDATE SET jawaban = EXCLUDED.jawaban, updated_at = NOW()`
+
+// Total skor, status nilai, dan nilai akhir dihitung dari baris jawaban.
+// Dipakai saat dikumpulkan dan setiap guru mengubah nilai essai, jadi tidak ada angka ganda.
+export async function hitungUlangNilai(client: PoolClient, percobaanId: string) {
+  await client.query(
+    `UPDATE "TRN_PercobaanUjian" p
+     SET skor_pg = agg.skor_pg,
+         skor_essai = agg.skor_essai,
+         skor_maks = agg.skor_maks,
+         status_nilai = CASE WHEN agg.belum > 0 THEN 'Menunggu' ELSE 'Final' END,
+         nilai_akhir = CASE
+                         WHEN agg.belum > 0 THEN NULL
+                         WHEN agg.skor_maks > 0
+                           THEN ROUND((agg.skor_pg + agg.skor_essai) / agg.skor_maks * 100, 2)
+                         ELSE 0
+                       END,
+         updated_at = NOW()
+     FROM (
+       SELECT COALESCE(SUM(nilai) FILTER (WHERE tipe = 'PG'), 0)    AS skor_pg,
+              COALESCE(SUM(nilai) FILTER (WHERE tipe = 'ESSAI'), 0) AS skor_essai,
+              COALESCE(SUM(bobot), 0)                               AS skor_maks,
+              COUNT(*) FILTER (WHERE tipe = 'ESSAI' AND nilai IS NULL) AS belum
+       FROM "TRN_JawabanUjian" WHERE percobaan_id = $1
+     ) agg
+     WHERE p.id = $1`,
+    [percobaanId]
+  )
+}
+
+const TOKEN_WINDOW_MENIT = 15
 
 export const masukUjianRepository = {
   // Token disimpan huruf besar. Hanya token yang berlaku (aktif) yang dicari.
@@ -75,6 +129,25 @@ export const masukUjianRepository = {
     return rows[0]?.ok === true
   },
 
+  // Token salah dalam beberapa menit terakhir. menitTunggu = sampai yang tertua keluar dari jendela.
+  async hitungTokenGagal(userId: string) {
+    const row = await queryOne<{ jumlah: number; menit_tunggu: number | null }>(
+      `SELECT COUNT(*)::int AS jumlah,
+              CEIL(EXTRACT(EPOCH FROM (MIN(created_at) + make_interval(mins => $2::int) - NOW())) / 60)::int
+                AS menit_tunggu
+       FROM "TRN_TokenGagal"
+       WHERE user_id = $1 AND created_at > NOW() - make_interval(mins => $2::int)`,
+      [userId, TOKEN_WINDOW_MENIT]
+    )
+    return { jumlah: row?.jumlah ?? 0, menitTunggu: Math.max(1, row?.menit_tunggu ?? 1) }
+  },
+
+  async catatTokenGagal(userId: string) {
+    await query(`INSERT INTO "TRN_TokenGagal" (user_id) VALUES ($1)`, [userId])
+    // Catatan lama tidak berguna lagi, dibersihkan sambil lewat
+    await query(`DELETE FROM "TRN_TokenGagal" WHERE created_at < NOW() - INTERVAL '1 day'`)
+  },
+
   // Untuk menilai: butuh kunci jawaban, jadi data_json dibaca utuh
   findUjianById(id: string) {
     return queryOne<{
@@ -82,19 +155,21 @@ export const masukUjianRepository = {
       durasi_menit: number
       acak_soal: boolean
       tampilkan_hasil: boolean
+      nilai_kkm: number
       data_json: UjianDataJson
     }>(
-      `SELECT id, durasi_menit, acak_soal, tampilkan_hasil, data_json
+      `SELECT id, durasi_menit, acak_soal, tampilkan_hasil, nilai_kkm, data_json
        FROM "MST_SoalUjian" WHERE id = $1`,
       [id]
     )
   },
 
+  // Hanya percobaan aktif (yang sudah direset guru tidak dihitung)
   findPercobaan(ujianId: string, userId: string) {
     return queryOne<PercobaanRow>(
       `SELECT ${PERCOBAAN_COLS}
        FROM "TRN_PercobaanUjian" p
-       WHERE p.soal_ujian_id = $1 AND p.user_id = $2`,
+       WHERE p.soal_ujian_id = $1 AND p.user_id = $2 AND p.is_active`,
       [ujianId, userId]
     )
   },
@@ -104,12 +179,12 @@ export const masukUjianRepository = {
     return queryOne<PercobaanRow>(
       `SELECT ${PERCOBAAN_COLS}
        FROM "TRN_PercobaanUjian" p
-       WHERE p.id = $1 AND p.user_id = $2`,
+       WHERE p.id = $1 AND p.user_id = $2 AND p.is_active`,
       [id, userId]
     )
   },
 
-  // Percobaan pertama menang: kalau sudah ada, tidak dibuat lagi dan waktu mulai tidak berubah
+  // Percobaan aktif pertama menang: kalau sudah ada, tidak dibuat lagi dan waktu mulai tidak berubah
   async createPercobaan(
     ujianId: string,
     userId: string,
@@ -119,7 +194,7 @@ export const masukUjianRepository = {
     await query(
       `INSERT INTO "TRN_PercobaanUjian" (soal_ujian_id, user_id, deadline_at, urutan_soal)
        VALUES ($1, $2, NOW() + make_interval(mins => $3::int), $4::jsonb)
-       ON CONFLICT (soal_ujian_id, user_id) DO NOTHING`,
+       ON CONFLICT (soal_ujian_id, user_id) WHERE is_active DO NOTHING`,
       [ujianId, userId, durasiMenit, JSON.stringify(urutanSoal)]
     )
     return this.findPercobaan(ujianId, userId)
@@ -133,6 +208,14 @@ export const masukUjianRepository = {
     return new Map(rows.map((r) => [r.soal_id, r.jawaban]))
   },
 
+  findHasilRows(percobaanId: string) {
+    return query<HasilRow>(
+      `SELECT soal_id, tipe, bobot::float8 AS bobot, is_benar, nilai::float8 AS nilai
+       FROM "TRN_JawabanUjian" WHERE percobaan_id = $1`,
+      [percobaanId]
+    )
+  },
+
   // Tidak menyimpan apa pun kalau percobaan sudah selesai
   async saveJawaban(percobaanId: string, items: JawabanItem[]) {
     if (items.length === 0) return
@@ -142,30 +225,46 @@ export const masukUjianRepository = {
     ])
   },
 
-  // Jawaban terakhir dan penutupan percobaan dalam satu transaksi.
-  // false kalau percobaan sudah selesai lebih dulu (dua permintaan bersamaan).
-  finalize(
-    percobaanId: string,
-    items: JawabanItem[],
-    skorPg: number,
-    skorMaks: number
-  ) {
+  // Tutup percobaan dan tulis satu baris nilai per soal dalam satu transaksi.
+  // false kalau percobaan sudah selesai lebih dulu (dua permintaan bersamaan):
+  // dalam kasus itu baris jawaban tidak disentuh, supaya nilai dari guru tidak tertimpa.
+  finalize(percobaanId: string, rows: JawabanFinal[]) {
     return withTransaction(async (client) => {
-      if (items.length > 0) {
-        await client.query(UPSERT_JAWABAN, [
-          percobaanId,
-          JSON.stringify(items.map((i) => ({ soal_id: i.soalId, jawaban: i.jawaban }))),
-        ])
-      }
-      const res = await client.query(
+      const closed = await client.query(
         `UPDATE "TRN_PercobaanUjian"
-         SET status = 'Selesai',
-             submitted_at = LEAST(NOW(), deadline_at),
-             skor_pg = $2, skor_maks = $3, updated_at = NOW()
-         WHERE id = $1 AND status = 'Berjalan'`,
-        [percobaanId, skorPg, skorMaks]
+         SET status = 'Selesai', submitted_at = LEAST(NOW(), deadline_at), updated_at = NOW()
+         WHERE id = $1 AND status = 'Berjalan' AND is_active`,
+        [percobaanId]
       )
-      return (res.rowCount ?? 0) > 0
+      if ((closed.rowCount ?? 0) === 0) return false
+
+      if (rows.length > 0) {
+        await client.query(
+          `INSERT INTO "TRN_JawabanUjian"
+             (percobaan_id, soal_id, jawaban, tipe, bobot, is_benar, nilai)
+           SELECT $1::uuid, x.soal_id, x.jawaban, x.tipe, x.bobot, x.is_benar, x.nilai
+           FROM jsonb_to_recordset($2::jsonb)
+                AS x(soal_id text, jawaban jsonb, tipe text, bobot numeric, is_benar boolean, nilai numeric)
+           ON CONFLICT (percobaan_id, soal_id)
+           DO UPDATE SET jawaban = EXCLUDED.jawaban, tipe = EXCLUDED.tipe, bobot = EXCLUDED.bobot,
+                         is_benar = EXCLUDED.is_benar, nilai = EXCLUDED.nilai, updated_at = NOW()`,
+          [
+            percobaanId,
+            JSON.stringify(
+              rows.map((r) => ({
+                soal_id: r.soalId,
+                jawaban: r.jawaban,
+                tipe: r.tipe,
+                bobot: r.bobot,
+                is_benar: r.isBenar,
+                nilai: r.nilai,
+              }))
+            ),
+          ]
+        )
+      }
+      await hitungUlangNilai(client, percobaanId)
+      return true
     })
   },
 }

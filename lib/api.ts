@@ -40,6 +40,15 @@ export async function requireUser() {
   return user
 }
 
+// Admin dan guru yang aktif (mengelola hasil ujian)
+export async function requireStaff() {
+  const user = await requireUser()
+  if (user.role_normalized !== "ADMIN" && user.role_normalized !== "TEACHER") {
+    throw new ApiError(403, "Anda tidak memiliki akses")
+  }
+  return user
+}
+
 // Hanya user ADMIN yang aktif yang boleh lewat
 export async function requireAdmin() {
   const session = await getSession()
