@@ -541,7 +541,7 @@ export default function RichTextEditor({
       >
         <EditorContent
           editor={editor}
-          className={floating ? `w-full focus:outline-none [&_.ProseMirror]:outline-none ${contentClassName ?? ""}` : "
+          className={floating ? `w-full focus:outline-none [&_.ProseMirror]:outline-none ${contentClassName ?? ""}` : `
             w-full min-h-[100px] prose prose-sm max-w-none
             [&_p]:m-0
             [&_h1]:text-2xl [&_h1]:font-bold
@@ -584,7 +584,7 @@ export default function RichTextEditor({
             [&_.column-resize-handle]:z-10
 
             [&_.selectedCell]:bg-accent/40
-          "}
+          `}
         />
 
         {/* Action Bar Tabel */}
