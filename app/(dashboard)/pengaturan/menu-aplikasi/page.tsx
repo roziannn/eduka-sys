@@ -40,7 +40,7 @@ interface SubMenuItem {
   id: string
   namaSubMenu: string
   url: string
-  urutan: number
+  sequence: number
   isAktif: boolean
   buttons: { id: string; code: string }[]
 }
@@ -50,7 +50,7 @@ interface MenuItem {
   namaMenu: string
   iconName: string | null
   url: string
-  urutan: number
+  sequence: number
   isAktif: boolean
   subMenus: SubMenuItem[]
 }
@@ -441,7 +441,7 @@ export default function MenuAplikasiPage() {
                           </Button>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm">{menu.urutan}</TableCell>
+                      <TableCell className="text-sm">{menu.sequence}</TableCell>
                       <TableCell className="font-semibold text-foreground">
                         <div className="flex items-center gap-2">
                           <MenuIcon className="h-4 w-4 text-primary" />
@@ -483,7 +483,7 @@ export default function MenuAplikasiPage() {
                       menu.subMenus.map((sub) => (
                         <TableRow key={sub.id} className="hover:bg-muted/10 text-xs">
                           <TableCell></TableCell>
-                          <TableCell className="font-mono text-muted-foreground">{sub.urutan}</TableCell>
+                          <TableCell className="font-mono text-muted-foreground">{sub.sequence}</TableCell>
                           <TableCell className="pl-6">
                             <div className="flex items-center gap-2">
                               <span className="text-muted-foreground">└─</span>

@@ -13,6 +13,9 @@ export type MenuPayload = {
   // Nama ikon (lihat lib/menu-icon-names.ts), hanya untuk menu utama.
   // undefined = tidak diubah (saat edit), null atau kosong = tanpa ikon.
   icon?: string | null
+  // Nomor urut di sidebar (bilangan bulat >= 1), diurutkan di antara menu yang satu induk.
+  // undefined/null/kosong = saat buat: otomatis paling akhir, saat edit: tidak diubah.
+  sequence?: unknown
   // undefined = button tidak disentuh. Terisi = daftar button final: [{ id?, code }]
   buttons?: unknown
 }
@@ -26,7 +29,7 @@ export interface SubMenuDto {
   id: string
   namaSubMenu: string
   url: string
-  urutan: number
+  sequence: number
   isAktif: boolean
   buttons: ButtonDto[]
 }
@@ -36,7 +39,7 @@ export interface MenuDto {
   namaMenu: string
   iconName: string | null
   url: string
-  urutan: number
+  sequence: number
   isAktif: boolean
   subMenus: SubMenuDto[]
 }
@@ -45,6 +48,7 @@ const MAX_NAMA = 100
 const MAX_URL = 255
 const MAX_BUTTONS = 30
 const MAX_BUTTON_CODE = 50
+const MAX_SEQ = 9999
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -100,6 +104,18 @@ function parseIcon(raw: unknown): string | null | undefined {
   if (raw === null || raw === "") return null
   if (!isMenuIconName(raw)) throw new ApiError(400, "Ikon tidak dikenal")
   return raw
+}
+
+function parseSeq(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined
+  const n = typeof raw === "string" ? Number(raw.trim()) : raw
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > MAX_SEQ) {
+    throw new ApiError(
+      400,
+      `Urutan harus bilangan bulat antara 1 sampai ${MAX_SEQ}`
+    )
+  }
+  return n
 }
 
 function parseParentId(raw: unknown): string | null {
@@ -177,7 +193,7 @@ export const menuService = {
         id: m.id,
         namaSubMenu: m.name,
         url: m.url ?? "",
-        urutan: m.seq,
+        sequence: m.seq,
         isAktif: m.is_active,
         buttons: buttonsByMenu.get(m.id) ?? [],
       })
@@ -191,7 +207,7 @@ export const menuService = {
         namaMenu: m.name,
         iconName: m.icon,
         url: m.url ?? "#",
-        urutan: m.seq,
+        sequence: m.seq,
         isAktif: m.is_active,
         subMenus: subsByParent.get(m.id) ?? [],
       }))
@@ -217,13 +233,15 @@ export const menuService = {
     // Ikon hanya untuk menu utama, dan boleh kosong
     const icon = parentId ? null : parseIcon(payload.icon) ?? null
 
+    const seq = parseSeq(payload.sequence)
+
     const buttons = parseButtons(payload.buttons)
     if (buttons?.some((b) => b.id !== null)) {
       throw new ApiError(400, "Button pada menu baru tidak boleh membawa id")
     }
 
     const id = await menuRepository.create(
-      { parentId, name: nama, url, icon, buttons },
+      { parentId, name: nama, url, icon, seq, buttons },
       actorId
     )
 
@@ -240,6 +258,8 @@ export const menuService = {
     // Ikon hanya bisa diubah di menu utama. Untuk sub menu, nilainya diabaikan.
     const icon = menu.parent_id === null ? parseIcon(payload.icon) : undefined
 
+    const seq = parseSeq(payload.sequence)
+
     const buttons = parseButtons(payload.buttons)
 
     // Setiap id button yang dikirim harus milik menu ini
@@ -254,7 +274,7 @@ export const menuService = {
 
     const updated = await menuRepository.update(
       id,
-      { name: nama, url, icon, buttons },
+      { name: nama, url, icon, seq, buttons },
       actorId
     )
     if (!updated) throw new ApiError(404, "Menu tidak ditemukan")
