@@ -602,11 +602,42 @@ export default function RichTextEditor({
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
+                  editor.chain().focus().addRowBefore().run()
+                }}
+                className="h-7 text-xs gap-1 border-dashed"
+                title="Sisipkan baris di atas kursor"
+              >
+                <Plus className="h-3 w-3" /> Baris Atas
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
                   editor.chain().focus().addRowAfter().run()
                 }}
                 className="h-7 text-xs gap-1 border-dashed"
+                title="Sisipkan baris di bawah kursor"
               >
-                <Plus className="h-3 w-3" /> Baris
+                <Plus className="h-3 w-3" /> Baris Bawah
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  editor.chain().focus().addColumnBefore().run()
+                }}
+                className="h-7 text-xs gap-1 border-dashed"
+                title="Sisipkan kolom di kiri kursor"
+              >
+                <Plus className="h-3 w-3" /> Kolom Kiri
               </Button>
 
               <Button
@@ -619,8 +650,9 @@ export default function RichTextEditor({
                   editor.chain().focus().addColumnAfter().run()
                 }}
                 className="h-7 text-xs gap-1 border-dashed"
+                title="Sisipkan kolom di kanan kursor"
               >
-                <Plus className="h-3 w-3" /> Kolom
+                <Plus className="h-3 w-3" /> Kolom Kanan
               </Button>
             </div>
 
