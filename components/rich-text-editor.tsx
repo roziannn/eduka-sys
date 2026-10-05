@@ -187,9 +187,23 @@ interface RichTextEditorProps {
   placeholder?: string
   isError?: boolean
   features?: RichTextFeatures
+  // Edit langsung di tempat: toolbar melayang di atas kotak, tanpa border dan padding editor
+  floating?: boolean
+  // Konten tambahan di awal toolbar (mode floating), misalnya handle geser
+  toolbarLead?: React.ReactNode
+  // Class untuk area teks (mode floating), supaya tampilan sama dengan hasil cetak
+  contentClassName?: string
 }
 
-export default function RichTextEditor({ value, onChange, isError, features }: RichTextEditorProps) {
+export default function RichTextEditor({
+  value,
+  onChange,
+  isError,
+  features,
+  floating = false,
+  toolbarLead,
+  contentClassName,
+}: RichTextEditorProps) {
   const showHistory = features?.history ?? true
   const showHeading = features?.heading ?? true
   const showTable = features?.table ?? true
@@ -229,6 +243,7 @@ export default function RichTextEditor({ value, onChange, isError, features }: R
       TableCell,
     ],
     content: value,
+    autofocus: floating ? "end" : false,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML())
     },
@@ -304,7 +319,13 @@ export default function RichTextEditor({ value, onChange, isError, features }: R
   const isInList = editor.isActive("bulletList") || editor.isActive("orderedList")
 
   return (
-    <div className="border border-input rounded-md bg-background overflow-hidden shadow-sm flex flex-col">
+    <div
+      className={
+        floating
+          ? "relative flex flex-col"
+          : "border border-input rounded-md bg-background overflow-hidden shadow-sm flex flex-col"
+      }
+    >
       {/* Input File Tersembunyi */}
       {showImage && (
         <input
@@ -318,9 +339,14 @@ export default function RichTextEditor({ value, onChange, isError, features }: R
 
       {/* Toolbar: membungkus ke baris berikutnya kalau tidak muat */}
       <div
-        className="flex flex-wrap items-center gap-0.5 p-1 border-b bg-muted/40 shrink-0 select-none"
+        className={
+          floating
+            ? "absolute bottom-full left-0 z-30 mb-3 flex w-max items-center gap-0.5 rounded-md border bg-background p-1 shadow-md select-none cursor-default"
+            : "flex flex-wrap items-center gap-0.5 p-1 border-b bg-muted/40 shrink-0 select-none"
+        }
         onMouseDown={(e) => e.preventDefault()}
       >
+        {floating && toolbarLead}
         {/* Undo & Redo */}
         {showHistory && (
           <>
@@ -504,14 +530,18 @@ export default function RichTextEditor({ value, onChange, isError, features }: R
 
       {/* Area Teks & Editor */}
       <div
-        className={`p-3 bg-background m-2 rounded-md border transition-all flex flex-col focus-within:border-ring focus-within:ring-1 focus-within:ring-ring cursor-text ${
-          isError ? "border-destructive focus-within:border-destructive focus-within:ring-destructive" : "border-input"
-        }`}
+        className={
+          floating
+            ? "flex flex-col cursor-text"
+            : `p-3 bg-background m-2 rounded-md border transition-all flex flex-col focus-within:border-ring focus-within:ring-1 focus-within:ring-ring cursor-text ${
+                isError ? "border-destructive focus-within:border-destructive focus-within:ring-destructive" : "border-input"
+              }`
+        }
         onClick={() => editor.chain().focus().run()}
       >
         <EditorContent
           editor={editor}
-          className="
+          className={floating ? `w-full focus:outline-none [&_.ProseMirror]:outline-none ${contentClassName ?? ""}` : "
             w-full min-h-[100px] prose prose-sm max-w-none
             [&_p]:m-0
             [&_h1]:text-2xl [&_h1]:font-bold
@@ -554,7 +584,7 @@ export default function RichTextEditor({ value, onChange, isError, features }: R
             [&_.column-resize-handle]:z-10
 
             [&_.selectedCell]:bg-accent/40
-          "
+          "}
         />
 
         {/* Action Bar Tabel */}
