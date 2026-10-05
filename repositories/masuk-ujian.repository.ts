@@ -25,6 +25,9 @@ export type PercobaanRow = {
   skor_essai: number | null
   skor_maks: number | null
   nilai_akhir: number | null
+  nilai_tercatat: number | null
+  jenis: "Utama" | "Remedial"
+  remedial_ke: number
   status_nilai: "Final" | "Menunggu" | null
   started_ms: number
   deadline_ms: number
@@ -55,6 +58,7 @@ export type HasilRow = {
 const PERCOBAAN_COLS = `p.id, p.soal_ujian_id, p.status, p.urutan_soal,
   p.skor_pg::float8 AS skor_pg, p.skor_essai::float8 AS skor_essai,
   p.skor_maks::float8 AS skor_maks, p.nilai_akhir::float8 AS nilai_akhir,
+  p.nilai_tercatat::float8 AS nilai_tercatat, p.jenis, p.remedial_ke,
   p.status_nilai,
   (EXTRACT(EPOCH FROM p.started_at) * 1000)::float8 AS started_ms,
   (EXTRACT(EPOCH FROM p.deadline_at) * 1000)::float8 AS deadline_ms,
@@ -72,27 +76,37 @@ const UPSERT_JAWABAN = `INSERT INTO "TRN_JawabanUjian" (percobaan_id, soal_id, j
 // Total skor, status nilai, dan nilai akhir dihitung dari baris jawaban.
 // Dipakai saat dikumpulkan dan setiap guru mengubah nilai essai, jadi tidak ada angka ganda.
 export async function hitungUlangNilai(client: PoolClient, percobaanId: string) {
+  // nilai_tercatat: nilai yang dihitung untuk siswa. Remedial dibatasi paling tinggi KKM ujian.
   await client.query(
     `UPDATE "TRN_PercobaanUjian" p
-     SET skor_pg = agg.skor_pg,
-         skor_essai = agg.skor_essai,
-         skor_maks = agg.skor_maks,
-         status_nilai = CASE WHEN agg.belum > 0 THEN 'Menunggu' ELSE 'Final' END,
-         nilai_akhir = CASE
-                         WHEN agg.belum > 0 THEN NULL
-                         WHEN agg.skor_maks > 0
-                           THEN ROUND((agg.skor_pg + agg.skor_essai) / agg.skor_maks * 100, 2)
-                         ELSE 0
-                       END,
+     SET skor_pg = h.skor_pg,
+         skor_essai = h.skor_essai,
+         skor_maks = h.skor_maks,
+         status_nilai = CASE WHEN h.belum > 0 THEN 'Menunggu' ELSE 'Final' END,
+         nilai_akhir = h.nilai,
+         nilai_tercatat = CASE
+                            WHEN h.nilai IS NULL THEN NULL
+                            WHEN p.jenis = 'Remedial' THEN LEAST(h.nilai, s.nilai_kkm)
+                            ELSE h.nilai
+                          END,
          updated_at = NOW()
      FROM (
-       SELECT COALESCE(SUM(nilai) FILTER (WHERE tipe = 'PG'), 0)    AS skor_pg,
-              COALESCE(SUM(nilai) FILTER (WHERE tipe = 'ESSAI'), 0) AS skor_essai,
-              COALESCE(SUM(bobot), 0)                               AS skor_maks,
-              COUNT(*) FILTER (WHERE tipe = 'ESSAI' AND nilai IS NULL) AS belum
-       FROM "TRN_JawabanUjian" WHERE percobaan_id = $1
-     ) agg
-     WHERE p.id = $1`,
+       SELECT agg.*,
+              CASE
+                WHEN agg.belum > 0 THEN NULL
+                WHEN agg.skor_maks > 0
+                  THEN ROUND((agg.skor_pg + agg.skor_essai) / agg.skor_maks * 100, 2)
+                ELSE 0
+              END AS nilai
+       FROM (
+         SELECT COALESCE(SUM(nilai) FILTER (WHERE tipe = 'PG'), 0)    AS skor_pg,
+                COALESCE(SUM(nilai) FILTER (WHERE tipe = 'ESSAI'), 0) AS skor_essai,
+                COALESCE(SUM(bobot), 0)                               AS skor_maks,
+                COUNT(*) FILTER (WHERE tipe = 'ESSAI' AND nilai IS NULL) AS belum
+         FROM "TRN_JawabanUjian" WHERE percobaan_id = $1
+       ) agg
+     ) h, "MST_SoalUjian" s
+     WHERE p.id = $1 AND s.id = p.soal_ujian_id`,
     [percobaanId]
   )
 }
@@ -169,9 +183,33 @@ export const masukUjianRepository = {
     return queryOne<PercobaanRow>(
       `SELECT ${PERCOBAAN_COLS}
        FROM "TRN_PercobaanUjian" p
-       WHERE p.soal_ujian_id = $1 AND p.user_id = $2 AND p.is_active`,
+       WHERE p.soal_ujian_id = $1 AND p.user_id = $2 AND p.is_active
+       ORDER BY p.remedial_ke DESC
+       LIMIT 1`,
       [ujianId, userId]
     )
+  },
+
+  // Nilai siswa untuk ujian ini: nilai tercatat terbaik dari semua percobaan aktif yang sudah final
+  async findNilaiFinal(ujianId: string, userId: string) {
+    const row = await queryOne<{ nilai: number | null }>(
+      `SELECT MAX(nilai_tercatat)::float8 AS nilai
+       FROM "TRN_PercobaanUjian"
+       WHERE soal_ujian_id = $1 AND user_id = $2 AND is_active AND status_nilai = 'Final'`,
+      [ujianId, userId]
+    )
+    return row?.nilai ?? null
+  },
+
+  // Izin remedial yang sudah diberikan guru tapi belum dipakai siswa
+  async findRemedialTersedia(ujianId: string, userId: string) {
+    const row = await queryOne<{ remedial_ke: number }>(
+      `SELECT remedial_ke FROM "TRN_RemedialUjian"
+       WHERE soal_ujian_id = $1 AND user_id = $2
+         AND percobaan_id IS NULL AND dibatalkan_at IS NULL`,
+      [ujianId, userId]
+    )
+    return row?.remedial_ke ?? null
   },
 
   // Hanya milik user itu sendiri
@@ -194,10 +232,47 @@ export const masukUjianRepository = {
     await query(
       `INSERT INTO "TRN_PercobaanUjian" (soal_ujian_id, user_id, deadline_at, urutan_soal)
        VALUES ($1, $2, NOW() + make_interval(mins => $3::int), $4::jsonb)
-       ON CONFLICT (soal_ujian_id, user_id) WHERE is_active DO NOTHING`,
+       ON CONFLICT (soal_ujian_id, user_id, remedial_ke) WHERE is_active DO NOTHING`,
       [ujianId, userId, durasiMenit, JSON.stringify(urutanSoal)]
     )
     return this.findPercobaan(ujianId, userId)
+  },
+
+  // Siswa memakai izin remedial: percobaan remedial dibuat dan izinnya ditandai terpakai,
+  // dalam satu transaksi. null kalau tidak ada izin (atau sudah dipakai permintaan lain).
+  createRemedial(
+    ujianId: string,
+    userId: string,
+    durasiMenit: number,
+    urutanSoal: string[]
+  ) {
+    return withTransaction(async (client) => {
+      const izin = await client.query<{ id: string; remedial_ke: number }>(
+        `SELECT id, remedial_ke FROM "TRN_RemedialUjian"
+         WHERE soal_ujian_id = $1 AND user_id = $2
+           AND percobaan_id IS NULL AND dibatalkan_at IS NULL
+         FOR UPDATE`,
+        [ujianId, userId]
+      )
+      if (izin.rows.length === 0) return false
+
+      const { id: izinId, remedial_ke: ke } = izin.rows[0]
+      const baru = await client.query<{ id: string }>(
+        `INSERT INTO "TRN_PercobaanUjian"
+           (soal_ujian_id, user_id, deadline_at, urutan_soal, jenis, remedial_ke)
+         VALUES ($1, $2, NOW() + make_interval(mins => $3::int), $4::jsonb, 'Remedial', $5)
+         ON CONFLICT (soal_ujian_id, user_id, remedial_ke) WHERE is_active DO NOTHING
+         RETURNING id`,
+        [ujianId, userId, durasiMenit, JSON.stringify(urutanSoal), ke]
+      )
+      if (baru.rows.length === 0) return false
+
+      await client.query(
+        `UPDATE "TRN_RemedialUjian" SET percobaan_id = $2, digunakan_at = NOW() WHERE id = $1`,
+        [izinId, baru.rows[0].id]
+      )
+      return true
+    })
   },
 
   async findJawaban(percobaanId: string) {

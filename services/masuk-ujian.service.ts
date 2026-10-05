@@ -56,6 +56,12 @@ export interface HasilUjian {
   // Menunggu = masih ada essai yang belum dinilai guru, nilai akhir belum ada
   statusNilai: "Final" | "Menunggu"
   nilaiAkhir: number | null
+  // Nilai yang dihitung untuk siswa. Remedial dibatasi paling tinggi KKM.
+  nilaiTercatat: number | null
+  // Nilai terbaik dari semua percobaan (percobaan awal dan remedial)
+  nilaiFinal: number | null
+  jenis: "Utama" | "Remedial"
+  remedialKe: number
   kkm: number
   tuntas: boolean | null
   rincian: RincianSoal[]
@@ -78,6 +84,8 @@ export interface MasukUjianResult {
   ujian: UjianSiswa
   // null = belum pernah mulai
   percobaan: PercobaanSiswa | null
+  // Guru sudah mengizinkan remedial dan siswa belum memakainya
+  remedialTersedia: { ke: number } | null
 }
 
 type Actor = { id: string; role_normalized: string }
@@ -282,8 +290,12 @@ async function bangunHasil(
       adaEssai,
       statusNilai: row.status_nilai,
       nilaiAkhir: row.nilai_akhir,
+      nilaiTercatat: row.nilai_tercatat,
+      nilaiFinal: await masukUjianRepository.findNilaiFinal(ujianId, userId),
+      jenis: row.jenis,
+      remedialKe: row.remedial_ke,
       kkm: data.nilai_kkm,
-      tuntas: row.nilai_akhir === null ? null : row.nilai_akhir >= data.nilai_kkm,
+      tuntas: row.nilai_tercatat === null ? null : row.nilai_tercatat >= data.nilai_kkm,
       rincian: toRincian(await masukUjianRepository.findHasilRows(row.id), data.data_json.soal),
     }
   }
@@ -308,10 +320,17 @@ async function bangunResponse(
 ): Promise<MasukUjianResult> {
   const { percobaan, serverNow } = await bangunHasil(ujian.id, user.id, Date.now())
 
+  // Izin remedial hanya relevan kalau percobaan terakhir sudah selesai
+  const ke =
+    percobaan?.status === "Selesai"
+      ? await masukUjianRepository.findRemedialTersedia(ujian.id, user.id)
+      : null
+
   return {
     userId: user.id,
     serverNow,
     percobaan,
+    remedialTersedia: ke === null ? null : { ke },
     ujian: {
       id: ujian.id,
       nama: ujian.nama,
@@ -345,7 +364,9 @@ export const masukUjianService = {
   },
 
   // Mulai mengerjakan: waktu mulai dan batas waktu ditetapkan server.
-  // Kalau sudah pernah mulai, percobaan yang ada dikembalikan apa adanya.
+  // - belum pernah mulai: percobaan awal dibuat
+  // - sudah mulai: percobaan yang ada dikembalikan apa adanya
+  // - percobaan terakhir sudah selesai dan guru mengizinkan remedial: remedial dibuat
   async mulai(rawToken: unknown, user: Actor) {
     const ujian = await resolveUjian(rawToken, user)
     if (ujian.data_json.soal.length === 0) {
@@ -353,12 +374,14 @@ export const masukUjianService = {
     }
 
     const ids = sortedSoal(ujian.data_json.soal).map((s) => s.id)
-    await masukUjianRepository.createPercobaan(
-      ujian.id,
-      user.id,
-      ujian.durasi_menit,
-      ujian.acak_soal ? shuffle(ids) : ids
-    )
+    const urutan = ujian.acak_soal ? shuffle(ids) : ids
+
+    const sekarang = await masukUjianRepository.findPercobaan(ujian.id, user.id)
+    if (!sekarang) {
+      await masukUjianRepository.createPercobaan(ujian.id, user.id, ujian.durasi_menit, urutan)
+    } else if (sekarang.status === "Selesai") {
+      await masukUjianRepository.createRemedial(ujian.id, user.id, ujian.durasi_menit, urutan)
+    }
     return bangunResponse(ujian, user)
   },
 

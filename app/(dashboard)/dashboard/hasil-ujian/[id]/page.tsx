@@ -23,6 +23,8 @@ import {
   Loader2,
   Hourglass,
   PenLine,
+  GraduationCap,
+  Undo2,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -47,21 +49,40 @@ import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
 type StatusPeserta =
   | "Tuntas"
   | "Remedial"
+  | "Remedial Diizinkan"
   | "Menunggu Penilaian"
   | "Sedang Mengerjakan"
   | "Belum Dikerjakan"
 
 // Bentuk data dari GET /api/hasil-ujian/[id]
+interface Riwayat {
+  percobaanId: string
+  jenis: "Utama" | "Remedial"
+  remedialKe: number
+  status: "Berjalan" | "Selesai"
+  statusNilai: "Final" | "Menunggu" | null
+  nilai: number | null
+  nilaiTercatat: number | null
+  mulai: string
+  selesai: string | null
+}
+
 interface Peserta {
   userId: string
   nama: string
   nisn: string
   kelas: string
-  percobaanId: string | null
+  percobaanId: string | null // percobaan terakhir
   status: StatusPeserta
-  nilai: number | null
+  nilai: number | null // nilai terbaik dari semua percobaan
+  remedialDipakai: number
+  sisaRemedial: number
+  bisaRemedial: boolean
+  izinMenunggu: boolean
+  bisaUjianUlang: boolean
   mulai: string | null
   selesai: string | null
+  riwayat: Riwayat[]
 }
 
 interface PesertaData {
@@ -73,6 +94,7 @@ interface PesertaData {
     kkm: number
     tahunAjaran: string
     semester: string
+    maxRemedial: number
   }
   kelas: string[]
   peserta: Peserta[]
@@ -103,6 +125,9 @@ interface PercobaanDetail {
   skorEssai: number | null
   skorMaks: number | null
   nilaiAkhir: number | null
+  nilaiTercatat: number | null
+  jenis: "Utama" | "Remedial"
+  remedialKe: number
   kkm: number
   mulai: string | null
   selesai: string | null
@@ -121,8 +146,8 @@ const HEADERS: { key: SortKey; label: string }[] = [
   { key: "status", label: "Status Hasil" },
 ]
 
+// Remedial punya tombol sendiri. Ujian ulang untuk hal di luar remedial.
 const ALASAN = [
-  { value: "remedial", judul: "Remedial Ujian", ket: "Nilai siswa belum mencapai kriteria ketuntasan (KKM)." },
   { value: "teknis", judul: "Kendala Teknis / Listrik", ket: "Terjadi gangguan jaringan atau mati listrik saat pengerjaan." },
   { value: "kurang_maksimal", judul: "Perbaikan Nilai (Kurang Maksimal)", ket: "Diberikan kesempatan tambahan atas persetujuan pengajar." },
 ]
@@ -151,6 +176,12 @@ function StatusBadge({ status }: { status: StatusPeserta }) {
       return (
         <Badge className="gap-1 bg-destructive hover:bg-destructive/90 print:border print:border-red-600 print:bg-transparent print:text-red-700">
           <AlertCircle className="h-3.5 w-3.5 print:hidden" /> Remedial
+        </Badge>
+      )
+    case "Remedial Diizinkan":
+      return (
+        <Badge variant="outline" className="gap-1 border-violet-300 text-violet-600">
+          <GraduationCap className="h-3.5 w-3.5 print:hidden" /> Remedial Diizinkan
         </Badge>
       )
     case "Menunggu Penilaian":
@@ -197,8 +228,10 @@ export default function DetailHasilUjianPage() {
   const [pageSize, setPageSize] = React.useState(5)
 
   const [retakeTarget, setRetakeTarget] = React.useState<Peserta | null>(null)
-  const [retakeReason, setRetakeReason] = React.useState("remedial")
-  const [detailId, setDetailId] = React.useState<string | null>(null)
+  const [retakeReason, setRetakeReason] = React.useState("teknis")
+  const [remedialTarget, setRemedialTarget] = React.useState<Peserta | null>(null)
+  const [remedialCatatan, setRemedialCatatan] = React.useState("")
+  const [detail, setDetail] = React.useState<{ percobaanId: string; riwayat: Riwayat[] } | null>(null)
 
   // Kelas pertama dipilih otomatis setelah data datang
   const activeClass = selectedClass ?? data?.kelas[0] ?? null
@@ -239,6 +272,32 @@ export default function DetailHasilUjianPage() {
       queryClient.invalidateQueries({ queryKey: ["hasil-ujian"], exact: true })
     },
     onError: (err) => toast.error(`Gagal mengatur ujian ulang: ${getErrorMessage(err)}`),
+  })
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: pesertaKey })
+    queryClient.invalidateQueries({ queryKey: ["hasil-ujian"], exact: true })
+  }
+
+  const remedialMutation = useMutation({
+    mutationFn: (input: { userId: string; catatan: string }) =>
+      fetchJson(`/api/hasil-ujian/${ujianId}/remedial`, { method: "POST", body: input }),
+    onSuccess: () => {
+      toast.success("Remedial diizinkan. Siswa bisa memulainya dengan memasukkan token.")
+      setRemedialTarget(null)
+      refresh()
+    },
+    onError: (err) => toast.error(`Gagal memberi remedial: ${getErrorMessage(err)}`),
+  })
+
+  const batalMutation = useMutation({
+    mutationFn: (userId: string) =>
+      fetchJson(`/api/hasil-ujian/${ujianId}/remedial`, { method: "DELETE", body: { userId } }),
+    onSuccess: () => {
+      toast.success("Izin remedial dibatalkan")
+      refresh()
+    },
+    onError: (err) => toast.error(`Gagal membatalkan remedial: ${getErrorMessage(err)}`),
   })
 
   const handleSort = (col: SortKey) => {
@@ -404,27 +463,66 @@ export default function DetailHasilUjianPage() {
                       <TableCell>{(page - 1) * pageSize + i + 1}</TableCell>
                       <TableCell className="font-mono text-xs">{item.nisn}</TableCell>
                       <TableCell className="font-semibold">{item.nama}</TableCell>
-                      <TableCell className="font-bold">{item.nilai !== null ? item.nilai : "-"}</TableCell>
+                      <TableCell className="font-bold">
+                        {item.nilai !== null ? item.nilai : "-"}
+                        {item.remedialDipakai > 0 && (
+                          <Badge variant="outline" className="ml-1.5 align-middle text-[10px] font-normal">
+                            R{item.remedialDipakai}
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <StatusBadge status={item.status} />
                       </TableCell>
                       <TableCell className="no-print">
                         <div className="flex gap-1.5">
-                          {item.percobaanId && item.status !== "Sedang Mengerjakan" && (
+                          {item.percobaanId && (
                             <Can code="btn-view">
-                              <Button size="sm" variant="outline" onClick={() => setDetailId(item.percobaanId)}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  setDetail({ percobaanId: item.percobaanId!, riwayat: item.riwayat })
+                                }
+                              >
                                 <FileText className="mr-1 h-3.5 w-3.5" /> Lihat Hasil
                               </Button>
                             </Can>
                           )}
-                          {item.percobaanId && (
+                          {item.bisaRemedial && (
                             <Can code="btn-edit">
                               <Button
                                 size="sm"
                                 variant="secondary"
                                 onClick={() => {
+                                  setRemedialTarget(item)
+                                  setRemedialCatatan("")
+                                }}
+                              >
+                                <GraduationCap className="mr-1 h-3.5 w-3.5" /> Remedial
+                              </Button>
+                            </Can>
+                          )}
+                          {item.izinMenunggu && (
+                            <Can code="btn-edit">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={batalMutation.isPending}
+                                onClick={() => batalMutation.mutate(item.userId)}
+                              >
+                                <Undo2 className="mr-1 h-3.5 w-3.5" /> Batalkan Remedial
+                              </Button>
+                            </Can>
+                          )}
+                          {item.bisaUjianUlang && (
+                            <Can code="btn-edit">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
                                   setRetakeTarget(item)
-                                  setRetakeReason("remedial")
+                                  setRetakeReason("teknis")
                                 }}
                               >
                                 <RotateCcw className="mr-1 h-3.5 w-3.5" /> Ujian Ulang
@@ -506,8 +604,8 @@ export default function DetailHasilUjianPage() {
               <RotateCcw className="h-5 w-5 text-primary" /> Atur Ujian Ulang
             </DialogTitle>
             <DialogDescription>
-              Izinkan siswa <strong>{retakeTarget?.nama}</strong> mengerjakan ujian kembali. Hasil sebelumnya
-              disimpan sebagai riwayat dan tidak lagi dihitung.
+              Siswa <strong>{retakeTarget?.nama}</strong> mengerjakan ulang percobaan terakhirnya (bukan
+              remedial). Hasil percobaan itu disimpan sebagai riwayat dan tidak lagi dihitung.
             </DialogDescription>
           </DialogHeader>
 
@@ -550,29 +648,97 @@ export default function DetailHasilUjianPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL LEMBAR JAWABAN + PENILAIAN ESSAI */}
-      <DetailDialog
-        percobaanId={detailId}
-        onClose={() => setDetailId(null)}
-        onChanged={() => {
-          queryClient.invalidateQueries({ queryKey: pesertaKey })
-          queryClient.invalidateQueries({ queryKey: ["hasil-ujian"], exact: true })
+      {/* MODAL BERI REMEDIAL */}
+      <Dialog
+        open={remedialTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !remedialMutation.isPending) setRemedialTarget(null)
         }}
-      />
+      >
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-primary" /> Izinkan Remedial
+            </DialogTitle>
+            <DialogDescription>
+              Siswa <strong>{remedialTarget?.nama}</strong> bernilai{" "}
+              <strong>{remedialTarget?.nilai ?? "-"}</strong>, di bawah KKM {data?.ujian.kkm}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-1 text-xs">
+            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+              <li>Siswa mengerjakan ujian yang sama dengan memasukkan token (ujian harus sedang dibuka).</li>
+              <li>Nilai remedial paling tinggi sama dengan KKM ({data?.ujian.kkm}).</li>
+              <li>Nilai siswa = yang terbaik antara ujian pertama dan semua remedial.</li>
+              <li>
+                Maksimal {data?.ujian.maxRemedial} kali remedial. Sisa kesempatan siswa ini:{" "}
+                <strong className="text-foreground">{remedialTarget?.sisaRemedial}</strong>.
+              </li>
+            </ul>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Catatan untuk siswa (opsional)</Label>
+              <Textarea
+                value={remedialCatatan}
+                onChange={(e) => setRemedialCatatan(e.target.value)}
+                maxLength={200}
+                className="min-h-[60px] text-xs"
+                placeholder="Contoh: Pelajari kembali bab 2 dan 3"
+                disabled={remedialMutation.isPending}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemedialTarget(null)} disabled={remedialMutation.isPending}>
+              Batal
+            </Button>
+            <Button
+              disabled={remedialMutation.isPending}
+              onClick={() => {
+                if (remedialTarget) {
+                  remedialMutation.mutate({ userId: remedialTarget.userId, catatan: remedialCatatan })
+                }
+              }}
+            >
+              {remedialMutation.isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memproses...</>
+              ) : (
+                "Izinkan Remedial"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL LEMBAR JAWABAN + PENILAIAN ESSAI */}
+      {detail && (
+        <DetailDialog
+          key={detail.percobaanId}
+          awalId={detail.percobaanId}
+          riwayat={detail.riwayat}
+          onClose={() => setDetail(null)}
+          onChanged={refresh}
+        />
+      )}
     </div>
   )
 }
 
 function DetailDialog({
-  percobaanId,
+  awalId,
+  riwayat,
   onClose,
   onChanged,
 }: {
-  percobaanId: string | null
+  awalId: string
+  riwayat: Riwayat[]
   onClose: () => void
   onChanged: () => void
 }) {
   const queryClient = useQueryClient()
+  // Guru bisa berpindah antar percobaan siswa (awal, remedial 1, remedial 2)
+  const [percobaanId, setPercobaanId] = React.useState(awalId)
   const can = useCan()
   const boleh = can("btn-edit")
   const key = ["hasil-ujian", "percobaan", percobaanId]
@@ -580,7 +746,7 @@ function DetailDialog({
   const { data, isLoading, error } = useQuery<PercobaanDetail>({
     queryKey: key,
     queryFn: () => fetchJson<PercobaanDetail>(`/api/hasil-ujian/percobaan/${percobaanId}`),
-    enabled: percobaanId !== null,
+    enabled: true,
     // Selalu ambil data segar: nilai bisa berubah dari tab lain
     staleTime: 0,
   })
@@ -602,7 +768,7 @@ function DetailDialog({
   const belumDinilai = data?.soal.filter((s) => s.tipe === "ESSAI" && s.nilai === null).length ?? 0
 
   return (
-    <Dialog open={percobaanId !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[680px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -612,6 +778,24 @@ function DetailDialog({
             Lembar jawaban siswa <strong>{data?.siswa.nama ?? "..."}</strong>.
           </DialogDescription>
         </DialogHeader>
+
+        {riwayat.length > 1 && (
+          <div className="flex flex-wrap gap-2 border-b pb-3">
+            {riwayat.map((r) => (
+              <Button
+                key={r.percobaanId}
+                size="sm"
+                variant={r.percobaanId === percobaanId ? "default" : "outline"}
+                onClick={() => setPercobaanId(r.percobaanId)}
+              >
+                {r.jenis === "Utama" ? "Ujian Pertama" : `Remedial ${r.remedialKe}`}
+                <span className="ml-1.5 text-[10px] opacity-80">
+                  {r.nilaiTercatat !== null ? r.nilaiTercatat : r.status === "Berjalan" ? "berjalan" : "menunggu"}
+                </span>
+              </Button>
+            ))}
+          </div>
+        )}
 
         {isLoading || !data ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
@@ -641,15 +825,22 @@ function DetailDialog({
                 <p className="font-semibold text-foreground">{fmtDurasi(data.mulai, data.selesai)}</p>
               </div>
               <div className="space-y-1">
-                <span className="block font-medium text-muted-foreground">Nilai Akhir & Status</span>
+                <span className="block font-medium text-muted-foreground">
+                  {data.jenis === "Remedial" ? `Nilai Remedial ke-${data.remedialKe}` : "Nilai Akhir & Status"}
+                </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-extrabold text-foreground">{data.nilaiAkhir ?? "-"}</span>
+                  <span className="text-sm font-extrabold text-foreground">{data.nilaiTercatat ?? "-"}</span>
                   {data.statusNilai === "Menunggu" ? (
                     <StatusBadge status="Menunggu Penilaian" />
-                  ) : data.nilaiAkhir !== null ? (
-                    <StatusBadge status={data.nilaiAkhir >= data.kkm ? "Tuntas" : "Remedial"} />
+                  ) : data.nilaiTercatat !== null ? (
+                    <StatusBadge status={data.nilaiTercatat >= data.kkm ? "Tuntas" : "Remedial"} />
                   ) : null}
                 </div>
+                {data.jenis === "Remedial" && data.nilaiAkhir !== null && data.nilaiAkhir !== data.nilaiTercatat && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Nilai mentah {data.nilaiAkhir}, dibatasi KKM {data.kkm}.
+                  </p>
+                )}
               </div>
               <div className="col-span-2 flex flex-wrap gap-x-6 gap-y-1 border-t pt-2 text-muted-foreground">
                 <span>Pilihan ganda: <b className="text-foreground">{data.skorPg ?? 0}</b></span>
