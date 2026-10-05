@@ -11,6 +11,9 @@ export type MenuAccessInput = { menuId: string; active: boolean }
 export type FunctionAccessInput = {
   menuId: string
   functionId: string
+  // Status akses sub menu pemilik button. Disimpan di is_active supaya
+  // button yang aktif selalu punya menu yang aktif (ck_core_rm_btn_needs_menu).
+  menuActive: boolean
   active: boolean
 }
 
@@ -53,17 +56,21 @@ export const roleMenuRepository = {
         await client.query(
           `INSERT INTO "CORE_RoleMenu"
              (role_id, menu_id, function_id, is_active, is_active_btn, created_by, updated_by)
-           SELECT $1::uuid, x.menu_id, x.function_id, FALSE, x.active, $5::uuid, $5::uuid
-           FROM unnest($2::uuid[], $3::uuid[], $4::boolean[]) AS x(menu_id, function_id, active)
+           SELECT $1::uuid, x.menu_id, x.function_id, x.menu_active, x.active, $6::uuid, $6::uuid
+           FROM unnest($2::uuid[], $3::uuid[], $4::boolean[], $5::boolean[])
+                AS x(menu_id, function_id, menu_active, active)
            ON CONFLICT (role_id, function_id) WHERE function_id IS NOT NULL
-           DO UPDATE SET is_active_btn = EXCLUDED.is_active_btn,
+           DO UPDATE SET is_active = EXCLUDED.is_active,
+                         is_active_btn = EXCLUDED.is_active_btn,
                          updated_by = EXCLUDED.updated_by,
                          updated_at = NOW()
-           WHERE "CORE_RoleMenu".is_active_btn IS DISTINCT FROM EXCLUDED.is_active_btn`,
+           WHERE "CORE_RoleMenu".is_active IS DISTINCT FROM EXCLUDED.is_active
+              OR "CORE_RoleMenu".is_active_btn IS DISTINCT FROM EXCLUDED.is_active_btn`,
           [
             roleId,
             functions.map((f) => f.menuId),
             functions.map((f) => f.functionId),
+            functions.map((f) => f.menuActive),
             functions.map((f) => f.active),
             actorId,
           ]
