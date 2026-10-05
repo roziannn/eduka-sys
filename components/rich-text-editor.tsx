@@ -360,7 +360,10 @@ export default function RichTextEditor({
             ? "mb-2 flex w-max max-w-full flex-wrap items-center gap-0.5 rounded-md border bg-background p-1 shadow-sm select-none cursor-default"
             : "flex flex-wrap items-center gap-0.5 p-1 border-b bg-muted/40 shrink-0 select-none"
         }
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => {
+          // Select font harus menerima mousedown agar bisa terbuka
+          if (!(e.target instanceof HTMLElement && e.target.closest("select"))) e.preventDefault()
+        }}
       >
         {floating && toolbarLead}
         {/* Undo & Redo */}
