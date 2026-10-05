@@ -77,6 +77,7 @@ const TEXTBOX_EDITOR_FEATURES: RichTextFeatures = {
   heading: false,
   image: false,
   math: false,
+  font: true,
 }
 
 // Gaya tampilan HTML rich text di canvas
