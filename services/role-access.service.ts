@@ -144,6 +144,7 @@ export const roleAccessService = {
           functions.push({
             menuId: s.id,
             functionId: b.id,
+            menuActive: subOn,
             active: subOn && functionIds.has(b.id),
           })
         }
