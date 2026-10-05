@@ -37,6 +37,8 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { QueryProvider } from "@/components/query-provider"
+import { ElementPreview } from "@/components/rapor-builder/element-preview"
+import { ElementProperties } from "@/components/rapor-builder/element-properties"
 import RichTextEditor, { type RichTextFeatures } from "@/components/rich-text-editor"
 import { fetchJson, getErrorMessage } from "@/lib/fetch-json"
 import {
@@ -326,9 +328,9 @@ function TemplateBuilder() {
     updateElements((prev) => prev.map((el) => (el.id === id ? { ...el, label } : el)))
   }
 
-  const handleChangeText = (id: string, text: string) => {
+  const handleChangeProps = (id: string, patch: Record<string, unknown>) => {
     updateElements((prev) =>
-      prev.map((el) => (el.id === id ? { ...el, props: { ...el.props, text } } : el))
+      prev.map((el) => (el.id === id ? { ...el, props: { ...el.props, ...patch } } : el))
     )
   }
 
@@ -531,69 +533,7 @@ function TemplateBuilder() {
                     </div>
 
                     {/* Render Visual Sesuai Tipe */}
-                    {el.type === "kop_sekolah" && (
-                      <div className="border-b-2 border-black pb-2 text-center">
-                        <p className="font-bold text-sm uppercase">Pemerintah Kota / Yayasan Pendidikan</p>
-                        <p className="font-extrabold text-base">SMA NEGERI 1 EDUKA</p>
-                        <p className="text-[10px] text-muted-foreground">Jl. Pendidikan No. 123, Jakarta Selatan</p>
-                      </div>
-                    )}
-
-                    {el.type === "heading" && (
-                      <div className="text-center my-1">
-                        <h2 className="font-bold text-base uppercase tracking-wide">
-                          {textOf(el) || el.label}
-                        </h2>
-                      </div>
-                    )}
-
-                    {el.type === "section" && (
-                      <div className="grid grid-cols-2 gap-2 text-xs border p-2 bg-muted/10 rounded">
-                        <div>Nama Siswa: <b>[Nama Siswa]</b></div>
-                        <div>Kelas: <b>[Nama Kelas]</b></div>
-                        <div>NISN: <b>[NISN Siswa]</b></div>
-                        <div>Semester: <b>[Ganjil/Genap]</b></div>
-                      </div>
-                    )}
-
-                    {el.type === "tabel_nilai" && (
-                      <div className="space-y-1">
-                        <span className="text-xs font-semibold">Tabel Capaian Nilai Akademik</span>
-                        <table className="w-full text-[11px] border-collapse border border-foreground/20">
-                          <thead>
-                            <tr className="bg-muted/30">
-                              <th className="border p-1 text-left">Mata Pelajaran</th>
-                              <th className="border p-1 w-12 text-center">Nilai</th>
-                              <th className="border p-1 text-left">Capaian Kompetensi</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td className="border p-1">Matematika</td>
-                              <td className="border p-1 text-center">88</td>
-                              <td className="border p-1">Menunjukkan penguasaan baik dalam Aljabar</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {el.type === "catatan_wali" && (
-                      <div className="border p-2 rounded text-xs space-y-1">
-                        <span className="font-semibold">Catatan Wali Kelas:</span>
-                        <p className="italic text-muted-foreground">
-                          "Pertahankan prestasi yang sangat baik ini di semester depan."
-                        </p>
-                      </div>
-                    )}
-
-                    {el.type === "ttd_block" && (
-                      <div className="grid grid-cols-3 text-center text-[11px] pt-4 mt-2">
-                        <div>Orang Tua / Wali<br /><br /><br />( ............................ )</div>
-                        <div>Wali Kelas<br /><br /><br />( ............................ )</div>
-                        <div>Kepala Sekolah<br /><br /><br />( ............................ )</div>
-                      </div>
-                    )}
+                    <ElementPreview element={el} />
 
                     {el.type === "textbox" &&
                       (isSelected ? (
@@ -690,16 +630,11 @@ function TemplateBuilder() {
                     />
                   </div>
 
-                  {selectedElement.type === "heading" && (
-                    <div>
-                      <Label className="text-xs">Isi Teks</Label>
-                      <Input
-                        value={textOf(selectedElement)}
-                        onChange={(e) => handleChangeText(selectedElement.id, e.target.value)}
-                        className="h-8 text-xs mt-1"
-                      />
-                    </div>
-                  )}
+                  <ElementProperties
+                    key={selectedElement.id}
+                    element={selectedElement}
+                    onChange={(patch) => handleChangeProps(selectedElement.id, patch)}
+                  />
 
                   {selectedElement.type === "textbox" && (
                     <p className="text-xs text-muted-foreground">
