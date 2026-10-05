@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/current-user"
+import { AccessProvider } from "@/components/access-provider"
 import { AppSidebar } from "@/components/app-sidebar"
 import { QueryProvider } from "@/components/query-provider"
 import {
@@ -28,6 +29,7 @@ export default async function DashboardLayout({
 
   return (
     <QueryProvider>
+      <AccessProvider access={user.access}>
       <SidebarProvider>
         <AppSidebar user={user} />
         <SidebarInset>
@@ -54,6 +56,7 @@ export default async function DashboardLayout({
           </main>
         </SidebarInset>
       </SidebarProvider>
+      </AccessProvider>
     </QueryProvider>
   )
 }
