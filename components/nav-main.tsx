@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -35,6 +36,8 @@ export function NavMain({
   }[]
 }) {
   const pathname = usePathname()
+  // Collapsible dikontrol: terbuka otomatis sesuai halaman aktif, kecuali sudah di-toggle manual
+  const [openOverrides, setOpenOverrides] = React.useState<Record<string, boolean>>({})
 
   // Helper untuk mengecek apakah URL cocok persis atau merupakan child route
   const checkIsActive = (url: string) => {
@@ -57,7 +60,10 @@ export function NavMain({
           return (
             <Collapsible
               key={item.title}
-              defaultOpen={isMainActive}
+              open={openOverrides[item.title] ?? Boolean(isMainActive)}
+              onOpenChange={(open) =>
+                setOpenOverrides((prev) => ({ ...prev, [item.title]: open }))
+              }
               render={<SidebarMenuItem />}
             >
               <SidebarMenuButton
