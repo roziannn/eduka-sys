@@ -68,12 +68,11 @@ const JENIS_LABEL: Record<string, string> = {
   TENGAH_SEMESTER: "Rapor PTS",
 }
 
-// Editor teks langsung di kotak canvas: tanpa undo/redo, heading, tabel, gambar, dan rumus
+// Editor teks langsung di kotak canvas: tanpa undo/redo, heading, gambar, dan rumus
 // (gambar disimpan base64 sehingga membengkakkan JSON template)
 const TEXTBOX_EDITOR_FEATURES: RichTextFeatures = {
   history: false,
   heading: false,
-  table: false,
   image: false,
   math: false,
 }
@@ -704,7 +703,7 @@ function TemplateBuilder() {
 
                   {selectedElement.type === "textbox" && (
                     <p className="text-xs text-muted-foreground">
-                      Klik kotak teks di canvas untuk mengedit isinya langsung. Toolbar format muncul di atas kotak.
+                      Klik kotak teks di canvas untuk mengedit isinya langsung. Toolbar format muncul di bagian atas kotak.
                     </p>
                   )}
                 </div>
