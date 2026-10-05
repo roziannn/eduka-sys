@@ -88,7 +88,7 @@ CREATE TRIGGER trg_core_menu_parent
 
 -- =========================================================
 -- CORE_MenuFunction
--- Button action (permission) milik sebuah menu. Contoh: btn-add, btn-edit, btn-delete.
+-- Button action (permission) milik sebuah menu. Standar: btn-create, btn-edit, btn-view (tambah kode lain hanya kalau memang dibutuhkan).
 -- Edit button = UPDATE baris ini, hapus button = DELETE baris ini.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS "CORE_MenuFunction" (
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS "CORE_MenuFunction" (
     updated_by  UUID REFERENCES "CORE_User" (id) ON DELETE SET NULL,
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    -- Huruf kecil, angka, dan tanda minus: btn-save, btn-add-sub
+    -- Huruf kecil, angka, dan tanda minus: btn-create, btn-edit
     CONSTRAINT ck_core_menufunction_code
         CHECK (code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     CONSTRAINT ck_core_menufunction_seq

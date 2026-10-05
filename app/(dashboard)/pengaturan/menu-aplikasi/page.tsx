@@ -73,7 +73,7 @@ const normalizeCode = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, 
 const validateCode = (code: string, others: string[]) => {
   if (!code) return "Kode button wajib diisi."
   if (code.length > MAX_BUTTON_CODE) return `Kode button maksimal ${MAX_BUTTON_CODE} karakter.`
-  if (!BUTTON_RE.test(code)) return "Pakai huruf kecil, angka, dan tanda minus. Contoh: btn-save."
+  if (!BUTTON_RE.test(code)) return "Pakai huruf kecil, angka, dan tanda minus. Contoh: btn-create."
   if (others.includes(code)) return `Button "${code}" sudah ada di daftar.`
   return null
 }
@@ -736,7 +736,7 @@ export default function MenuAplikasiPage() {
 
               <div className="flex gap-2">
                 <Input
-                  placeholder="Contoh: btn-save, btn-delete"
+                  placeholder="Contoh: btn-create, btn-edit, btn-view"
                   value={newButtonInput}
                   disabled={isSaving || editingButtonIndex !== null}
                   onChange={(e) => {

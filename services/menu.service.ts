@@ -148,7 +148,7 @@ function parseButtons(raw: unknown): ButtonInput[] | undefined {
     if (code.length > MAX_BUTTON_CODE || !BUTTON_RE.test(code)) {
       throw new ApiError(
         400,
-        `Kode button "${code.slice(0, MAX_BUTTON_CODE)}" tidak valid. Pakai huruf kecil, angka, dan tanda minus, contoh: btn-save.`
+        `Kode button "${code.slice(0, MAX_BUTTON_CODE)}" tidak valid. Pakai huruf kecil, angka, dan tanda minus, contoh: btn-create.`
       )
     }
     if (codes.has(code)) {

@@ -161,7 +161,7 @@ export default function KelasPage() {
           <h1 className="text-2xl font-bold">Master Data Kelas</h1>
           <p className="text-sm text-muted-foreground">Kelola ruang kelas, tingkat, dan alokasi jurusan.</p>
         </div>
-        <Can code="btn-add">
+        <Can code="btn-create">
           <Button onClick={() => handleOpen()}><Plus className="mr-2 h-4 w-4" /> Tambah Kelas</Button>
         </Can>
       </div>

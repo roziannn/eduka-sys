@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Can } from "@/components/access-provider"
 
 export interface Exam {
   id: string
@@ -133,11 +134,13 @@ export default function HasilUjianPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Link href={`/dashboard/hasil-ujian/${item.id}`}>
-                      <Button variant="default" size="sm">
-                        <Eye className="mr-1.5 h-4 w-4" /> Show
-                      </Button>
-                    </Link>
+                    <Can code="btn-view">
+                      <Link href={`/dashboard/hasil-ujian/${item.id}`}>
+                        <Button variant="default" size="sm">
+                          <Eye className="mr-1.5 h-4 w-4" /> Show
+                        </Button>
+                      </Link>
+                    </Can>
                   </TableCell>
                 </TableRow>
               ))

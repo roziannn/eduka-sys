@@ -156,7 +156,7 @@ export default function MataPelajaranPage() {
           <h1 className="text-2xl font-bold">Master Mata Pelajaran</h1>
           <p className="text-sm text-muted-foreground">Kelola kurikulum dan daftar mata pelajaran.</p>
         </div>
-        <Can code="btn-add">
+        <Can code="btn-create">
           <Button onClick={() => handleOpen()}><Plus className="mr-2 h-4 w-4" /> Tambah</Button>
         </Can>
       </div>
