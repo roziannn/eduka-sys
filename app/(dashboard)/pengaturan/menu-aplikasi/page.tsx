@@ -78,6 +78,19 @@ const validateCode = (code: string, others: string[]) => {
   return null
 }
 
+const MAX_SEQUENCE = 9999
+
+// Isian urutan: kosong = otomatis paling akhir (saat tambah) atau tidak diubah (saat edit)
+const parseSequence = (raw: string): { value: number | null; error: string | null } => {
+  const text = raw.trim()
+  if (!text) return { value: null, error: null }
+  const n = Number(text)
+  if (!Number.isInteger(n) || n < 1 || n > MAX_SEQUENCE) {
+    return { value: null, error: `Urutan harus bilangan bulat antara 1 sampai ${MAX_SEQUENCE}.` }
+  }
+  return { value: n, error: null }
+}
+
 export default function MenuAplikasiPage() {
   const queryClient = useQueryClient()
 
@@ -101,11 +114,13 @@ export default function MenuAplikasiPage() {
     namaMenu: "",
     url: "",
     iconName: "",
+    sequence: "",
   })
 
   const [formSubMenu, setFormSubMenu] = React.useState({
     namaSubMenu: "",
     url: "",
+    sequence: "",
   })
 
   // State List Button Action di Sub Menu
@@ -163,7 +178,7 @@ export default function MenuAplikasiPage() {
   const handleOpenAddMenu = () => {
     setEditingMenu(null)
     setErrorMsg(null)
-    setFormMenu({ namaMenu: "", url: "", iconName: "" })
+    setFormMenu({ namaMenu: "", url: "", iconName: "", sequence: "" })
     setOpenMenuModal(true)
   }
 
@@ -175,6 +190,7 @@ export default function MenuAplikasiPage() {
       url: menu.url,
       // Ikon di luar daftar yang tersedia dianggap kosong (akan dihapus kalau disimpan)
       iconName: isMenuIconName(menu.iconName) ? menu.iconName : "",
+      sequence: String(menu.sequence),
     })
     setOpenMenuModal(true)
   }
@@ -185,6 +201,11 @@ export default function MenuAplikasiPage() {
       setErrorMsg("Nama menu utama wajib diisi.")
       return
     }
+    const sequence = parseSequence(formMenu.sequence)
+    if (sequence.error) {
+      setErrorMsg(sequence.error)
+      return
+    }
     setErrorMsg(null)
 
     const isEdit = Boolean(editingMenu)
@@ -193,7 +214,12 @@ export default function MenuAplikasiPage() {
     saveMutation.mutate(
       {
         id: editingMenu?.id,
-        body: { nama, url: formMenu.url, icon: formMenu.iconName || null },
+        body: {
+          nama,
+          url: formMenu.url,
+          icon: formMenu.iconName || null,
+          sequence: sequence.value,
+        },
       },
       {
         onSuccess: () => {
@@ -223,7 +249,7 @@ export default function MenuAplikasiPage() {
     setEditingSubMenu(null)
     setActiveParentMenu(parentMenu)
     setErrorMsg(null)
-    setFormSubMenu({ namaSubMenu: "", url: "" })
+    setFormSubMenu({ namaSubMenu: "", url: "", sequence: "" })
     setButtonsList([])
     resetButtonEditor()
     setOpenSubMenuModal(true)
@@ -233,7 +259,11 @@ export default function MenuAplikasiPage() {
     setEditingSubMenu(subMenu)
     setActiveParentMenu(parentMenu)
     setErrorMsg(null)
-    setFormSubMenu({ namaSubMenu: subMenu.namaSubMenu, url: subMenu.url })
+    setFormSubMenu({
+      namaSubMenu: subMenu.namaSubMenu,
+      url: subMenu.url,
+      sequence: String(subMenu.sequence),
+    })
     setButtonsList(subMenu.buttons.map((b) => ({ id: b.id, code: b.code })))
     resetButtonEditor()
     setOpenSubMenuModal(true)
@@ -305,6 +335,11 @@ export default function MenuAplikasiPage() {
       setErrorMsg("URL rute halaman wajib diisi.")
       return
     }
+    const sequence = parseSequence(formSubMenu.sequence)
+    if (sequence.error) {
+      setErrorMsg(sequence.error)
+      return
+    }
     if (editingButtonIndex !== null) {
       setErrorMsg("Selesaikan atau batalkan edit button terlebih dahulu.")
       return
@@ -328,6 +363,7 @@ export default function MenuAplikasiPage() {
           ...(isEdit ? {} : { parentId: parent.id }),
           nama,
           url: formSubMenu.url,
+          sequence: sequence.value,
           buttons: buttonsList.map(({ id, code }) => ({ id, code })),
         },
       },
@@ -588,6 +624,21 @@ export default function MenuAplikasiPage() {
             </div>
 
             <div className="space-y-1.5">
+              <Label>Urutan di Sidebar (Opsional)</Label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_SEQUENCE}
+                step={1}
+                placeholder={editingMenu ? "Kosongkan jika tidak diubah" : "Kosongkan untuk taruh paling akhir"}
+                value={formMenu.sequence}
+                disabled={isSaving}
+                onChange={(e) => setFormMenu({ ...formMenu, sequence: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <Label>Ikon (Opsional)</Label>
               <IconPicker
                 value={formMenu.iconName}
@@ -658,6 +709,21 @@ export default function MenuAplikasiPage() {
                 value={formSubMenu.url}
                 disabled={isSaving}
                 onChange={(e) => setFormSubMenu({ ...formSubMenu, url: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Urutan di Sidebar (Opsional)</Label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_SEQUENCE}
+                step={1}
+                placeholder={editingSubMenu ? "Kosongkan jika tidak diubah" : "Kosongkan untuk taruh paling akhir"}
+                value={formSubMenu.sequence}
+                disabled={isSaving}
+                onChange={(e) => setFormSubMenu({ ...formSubMenu, sequence: e.target.value })}
               />
             </div>
 
