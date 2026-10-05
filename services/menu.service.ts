@@ -15,7 +15,7 @@ export type MenuPayload = {
   icon?: string | null
   // Nomor urut di sidebar (bilangan bulat >= 1), diurutkan di antara menu yang satu induk.
   // undefined/null/kosong = saat buat: otomatis paling akhir, saat edit: tidak diubah.
-  seq?: unknown
+  sequence?: unknown
   // undefined = button tidak disentuh. Terisi = daftar button final: [{ id?, code }]
   buttons?: unknown
 }
@@ -233,7 +233,7 @@ export const menuService = {
     // Ikon hanya untuk menu utama, dan boleh kosong
     const icon = parentId ? null : parseIcon(payload.icon) ?? null
 
-    const seq = parseSeq(payload.seq)
+    const seq = parseSeq(payload.sequence)
 
     const buttons = parseButtons(payload.buttons)
     if (buttons?.some((b) => b.id !== null)) {
@@ -258,7 +258,7 @@ export const menuService = {
     // Ikon hanya bisa diubah di menu utama. Untuk sub menu, nilainya diabaikan.
     const icon = menu.parent_id === null ? parseIcon(payload.icon) : undefined
 
-    const seq = parseSeq(payload.seq)
+    const seq = parseSeq(payload.sequence)
 
     const buttons = parseButtons(payload.buttons)
 
