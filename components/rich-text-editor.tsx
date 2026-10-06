@@ -420,7 +420,7 @@ export default function RichTextEditor({
               }}
               className="h-8 w-[70px] rounded-md border border-input bg-background px-1.5 text-xs"
             >
-              <option value="">Ukuran</option>
+              <option value="">Size</option>
               {FONT_SIZES.map((n) => (
                 <option key={n} value={`${n}pt`}>
                   {n}

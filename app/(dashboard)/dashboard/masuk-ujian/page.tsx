@@ -155,7 +155,7 @@ function TokenForm({
                 setToken(e.target.value.toUpperCase())
                 setError(null)
               }}
-              placeholder="Contoh: A7K2M9"
+              placeholder=""
               maxLength={12}
               autoFocus
               autoComplete="off"
