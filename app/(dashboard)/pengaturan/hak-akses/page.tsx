@@ -29,6 +29,7 @@ export interface RoleData {
   description: string
   total_user: number
   status: "Aktif" | "Nonaktif"
+  created_at: string
 }
 
 export interface RoleUI {
@@ -38,11 +39,15 @@ export interface RoleUI {
   deskripsi: string
   jumlahPengguna: number
   status: "Aktif" | "Nonaktif"
+  createdAt: string
 }
 
 const ROLES_KEY = ["roles"]
 
 const ADMIN_ROLE_CODE = "ADMIN"
+
+const formatTanggal = (iso: string) =>
+  new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(new Date(iso))
 
 export default function HakAksesPage() {
   const queryClient = useQueryClient()
@@ -85,6 +90,7 @@ export default function HakAksesPage() {
         deskripsi: r.description,
         jumlahPengguna: r.total_user,
         status: r.status,
+        createdAt: r.created_at,
       })),
     [rawRoles]
   )
@@ -196,6 +202,7 @@ export default function HakAksesPage() {
               <TableHead className="w-[200px]">Nama Role</TableHead>
               <TableHead>Deskripsi</TableHead>
               <TableHead className="w-[140px]">Jumlah</TableHead>
+              <TableHead className="w-[160px]">Dibuat Pada</TableHead>
               <TableHead className="w-[120px]">Status</TableHead>
               <TableHead className="text-center w-[140px]">Aksi</TableHead>
             </TableRow>
@@ -203,7 +210,7 @@ export default function HakAksesPage() {
           <TableBody>
             {tableLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={7} className="h-24 text-center">
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" /> Memuat data...
                   </div>
@@ -218,6 +225,9 @@ export default function HakAksesPage() {
                   </TableCell>
                   <TableCell className="text-sm">{role.deskripsi || "-"}</TableCell>
                   <TableCell className="text-sm">{role.jumlahPengguna} User</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {formatTanggal(role.createdAt)}
+                  </TableCell>
                   <TableCell>
                     {role.status === "Aktif" ? (
                       <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 hover:bg-emerald-500/20 text-[10px] gap-1 shadow-none">
@@ -257,7 +267,7 @@ export default function HakAksesPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                   Data role tidak ditemukan.
                 </TableCell>
               </TableRow>

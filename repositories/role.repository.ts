@@ -7,6 +7,7 @@ export type RoleRecord = {
   description: string | null
   is_active: boolean
   total_user: number
+  created_at: Date
 }
 
 type RoleInput = {
@@ -18,7 +19,7 @@ type RoleInput = {
 export const roleRepository = {
   findAll() {
     return query<RoleRecord>(
-      `SELECT r.id, r.normalized_name AS code, r.name, r.description, r.is_active,
+      `SELECT r.id, r.normalized_name AS code, r.name, r.description, r.is_active, r.created_at,
               COUNT(u.id)::int AS total_user
        FROM "CORE_Role" r
        LEFT JOIN "CORE_User" u ON u.role_id = r.id

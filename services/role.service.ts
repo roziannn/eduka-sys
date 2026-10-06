@@ -21,6 +21,7 @@ const formatRole = (r: RoleRecord) => ({
   description: r.description ?? "",
   total_user: r.total_user,
   status: r.is_active ? "Aktif" : "Nonaktif",
+  created_at: new Date(r.created_at).toISOString(),
 })
 
 function parse(payload: RolePayload) {
