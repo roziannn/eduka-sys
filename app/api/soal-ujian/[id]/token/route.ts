@@ -1,11 +1,11 @@
-import { ok, handleError, requireAdmin, readJson, ApiError } from "@/lib/api"
+import { ok, handleError, requireStaff, readJson, ApiError } from "@/lib/api"
 import { tokenUjianService } from "@/services/token-ujian.service"
 
 type Context = { params: Promise<{ id: string }> }
 
 export async function GET(_request: Request, { params }: Context) {
   try {
-    await requireAdmin()
+    await requireStaff()
     const { id } = await params
     return ok(await tokenUjianService.get(id))
   } catch (err) {
@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: Context) {
 }
 export async function PATCH(request: Request, { params }: Context) {
   try {
-    const admin = await requireAdmin()
+    const admin = await requireStaff()
     const { id } = await params
     const body = await readJson<{ open?: unknown; expiresInMinutes?: unknown }>(request)
 
