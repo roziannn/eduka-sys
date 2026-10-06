@@ -1,3 +1,4 @@
+import { auditTrailService } from "@/services/audit-trail.service"
 import { ok, handleError, requireAdmin, readJson } from "@/lib/api"
 import {
   mataPelajaranService,
@@ -17,7 +18,9 @@ export async function POST(request: Request) {
   try {
     const admin = await requireAdmin()
     const body = await readJson<MataPelajaranPayload>(request)
-    return ok(await mataPelajaranService.create(body, admin.id), 201)
+    const created = await mataPelajaranService.create(body, admin.id)
+    await auditTrailService.log(admin, "Add Subject", `Subject "${body.nama}" created`)
+    return ok(created, 201)
   } catch (err) {
     return handleError(err)
   }

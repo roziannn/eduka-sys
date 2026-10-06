@@ -1,3 +1,4 @@
+import { auditTrailService } from "@/services/audit-trail.service"
 import { ok, handleError, requireStaff, readJson } from "@/lib/api"
 import { hasilUjianService } from "@/services/hasil-ujian.service"
 
@@ -8,7 +9,9 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const staff = await requireStaff()
     const { id } = await params
-    await hasilUjianService.reset(id, await readJson<{ alasan?: unknown }>(request), staff.id)
+    const body = await readJson<{ alasan?: unknown }>(request)
+    await hasilUjianService.reset(id, body, staff.id)
+    await auditTrailService.log(staff, "Reset Exam Attempt", `Attempt ${id}, reason: ${String(body.alasan)}`)
     return ok({ id })
   } catch (err) {
     return handleError(err)

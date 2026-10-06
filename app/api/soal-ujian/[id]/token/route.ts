@@ -1,4 +1,6 @@
+import { auditTrailService } from "@/services/audit-trail.service"
 import { ok, handleError, requireStaff, readJson, ApiError } from "@/lib/api"
+import { soalUjianService } from "@/services/soal-ujian.service"
 import { tokenUjianService } from "@/services/token-ujian.service"
 
 type Context = { params: Promise<{ id: string }> }
@@ -30,7 +32,14 @@ export async function PATCH(request: Request, { params }: Context) {
       expiresInMinutes = body.expiresInMinutes
     }
 
-    return ok(await tokenUjianService.setOpen(id, body.open, admin.id, expiresInMinutes))
+    const result = await tokenUjianService.setOpen(id, body.open, admin.id, expiresInMinutes)
+    const ujian = await soalUjianService.get(id).catch(() => null)
+    await auditTrailService.log(
+      admin,
+      body.open ? "Open Exam Token" : "Close Exam Token",
+      `Exam "${ujian?.nama ?? id}"`
+    )
+    return ok(result)
   } catch (err) {
     return handleError(err)
   }

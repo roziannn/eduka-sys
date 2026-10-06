@@ -1,4 +1,5 @@
 import { ApiError } from "@/lib/api"
+import { auditTrailService } from "@/services/audit-trail.service"
 import {
   masukUjianRepository,
   type HasilRow,
@@ -88,7 +89,7 @@ export interface MasukUjianResult {
   remedialTersedia: { ke: number } | null
 }
 
-type Actor = { id: string; role_normalized: string }
+type Actor = { id: string; role_normalized: string; full_name?: string | null; username?: string | null }
 
 const MAX_ESSAI_LENGTH = 20000
 // Toleransi keterlambatan (detik) untuk jawaban yang masih di perjalanan saat waktu habis
@@ -379,8 +380,10 @@ export const masukUjianService = {
     const sekarang = await masukUjianRepository.findPercobaan(ujian.id, user.id)
     if (!sekarang) {
       await masukUjianRepository.createPercobaan(ujian.id, user.id, ujian.durasi_menit, urutan)
+      await auditTrailService.log(user, "Start Exam", `Exam "${ujian.nama}"`)
     } else if (sekarang.status === "Selesai") {
       await masukUjianRepository.createRemedial(ujian.id, user.id, ujian.durasi_menit, urutan)
+      await auditTrailService.log(user, "Start Remedial", `Exam "${ujian.nama}"`)
     }
     return bangunResponse(ujian, user)
   },
@@ -431,6 +434,7 @@ export const masukUjianService = {
       }
 
       await tutupPercobaan(percobaan, ujian, extra)
+      await auditTrailService.log(user, "Submit Exam", `Exam "${ujian.nama}"`)
     }
 
     const { percobaan: hasil } = await bangunHasil(

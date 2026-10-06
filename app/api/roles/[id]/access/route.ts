@@ -1,3 +1,4 @@
+import { auditTrailService } from "@/services/audit-trail.service"
 import { ok, handleError, requireAdmin, readJson } from "@/lib/api"
 import {
   roleAccessService,
@@ -20,10 +21,13 @@ export async function PUT(request: Request, { params }: Context) {
   try {
     const admin = await requireAdmin()
     const { id } = await params
-    await roleAccessService.save(
-      id,
-      await readJson<RoleAccessPayload>(request),
-      admin.id
+    const body = await readJson<RoleAccessPayload>(request)
+    await auditTrailService.logUpdate(
+      admin,
+      "Edit Role Access",
+      `Role access`,
+      async () => (await roleAccessService.get(id)).menus,
+      () => roleAccessService.save(id, body, admin.id)
     )
     return ok({ id })
   } catch (err) {

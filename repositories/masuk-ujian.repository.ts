@@ -167,12 +167,13 @@ export const masukUjianRepository = {
     return queryOne<{
       id: string
       durasi_menit: number
+      nama: string
       acak_soal: boolean
       tampilkan_hasil: boolean
       nilai_kkm: number
       data_json: UjianDataJson
     }>(
-      `SELECT id, durasi_menit, acak_soal, tampilkan_hasil, nilai_kkm, data_json
+      `SELECT id, nama, durasi_menit, acak_soal, tampilkan_hasil, nilai_kkm, data_json
        FROM "MST_SoalUjian" WHERE id = $1`,
       [id]
     )

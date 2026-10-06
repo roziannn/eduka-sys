@@ -1,3 +1,4 @@
+import { auditTrailService } from "@/services/audit-trail.service"
 import { ok, handleError, requireStaff, readJson } from "@/lib/api"
 import { soalUjianService, type SoalUjianPayload } from "@/services/soal-ujian.service"
 
@@ -18,7 +19,13 @@ export async function PUT(request: Request, { params }: Context) {
     const admin = await requireStaff()
     const { id } = await params
     const body = await readJson<SoalUjianPayload>(request)
-    await soalUjianService.update(id, body, admin.id)
+    await auditTrailService.logUpdate(
+      admin,
+      "Edit Exam",
+      `Exam "${body.nama}"`,
+      () => soalUjianService.get(id),
+      () => soalUjianService.update(id, body, admin.id)
+    )
     return ok({ id })
   } catch (err) {
     return handleError(err)

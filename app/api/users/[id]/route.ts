@@ -1,3 +1,4 @@
+import { auditTrailService } from "@/services/audit-trail.service"
 import { ok, handleError, requireAdmin, readJson } from "@/lib/api"
 import { userService, type UserPayload } from "@/services/user.service"
 
@@ -8,7 +9,13 @@ export async function PUT(request: Request, { params }: Context) {
     const admin = await requireAdmin()
     const { id } = await params
     const body = await readJson<UserPayload>(request)
-    await userService.update(id, body, admin.id)
+    await auditTrailService.logUpdate(
+      admin,
+      "Edit User",
+      `User "${body.nama}"`,
+      async () => (await userService.list()).find((x) => x.id === id),
+      () => userService.update(id, body, admin.id)
+    )
     return ok({ id })
   } catch (err) {
     return handleError(err)

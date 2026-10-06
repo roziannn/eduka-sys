@@ -1,3 +1,4 @@
+import { auditTrailService } from "@/services/audit-trail.service"
 import { ok, handleError, requireAdmin, readJson } from "@/lib/api"
 import {
   templateRaporService,
@@ -21,7 +22,13 @@ export async function PUT(request: Request, { params }: Context) {
     const admin = await requireAdmin()
     const { id } = await params
     const body = await readJson<TemplateRaporPayload>(request)
-    await templateRaporService.update(id, body, admin.id)
+    await auditTrailService.logUpdate(
+      admin,
+      "Edit Report Template",
+      `Template "${body.nama}"`,
+      () => templateRaporService.get(id),
+      () => templateRaporService.update(id, body, admin.id)
+    )
     return ok({ id })
   } catch (err) {
     return handleError(err)

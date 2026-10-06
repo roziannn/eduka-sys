@@ -1,3 +1,4 @@
+import { auditTrailService } from "@/services/audit-trail.service"
 import { ok, handleError, requireStaff, readJson } from "@/lib/api"
 import { hasilUjianService } from "@/services/hasil-ujian.service"
 
@@ -8,11 +9,9 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const staff = await requireStaff()
     const { id } = await params
-    await hasilUjianService.beriRemedial(
-      id,
-      await readJson<{ userId?: unknown; catatan?: unknown }>(request),
-      staff.id
-    )
+    const body = await readJson<{ userId?: unknown; catatan?: unknown }>(request)
+    await hasilUjianService.beriRemedial(id, body, staff.id)
+    await auditTrailService.log(staff, "Grant Remedial", `Exam ${id}, student ${String(body.userId)}`)
     return ok({ id }, 201)
   } catch (err) {
     return handleError(err)
@@ -22,9 +21,11 @@ export async function POST(request: Request, { params }: Context) {
 // Batalkan izin remedial yang belum dipakai siswa
 export async function DELETE(request: Request, { params }: Context) {
   try {
-    await requireStaff()
+    const staff = await requireStaff()
     const { id } = await params
-    await hasilUjianService.batalkanRemedial(id, await readJson<{ userId?: unknown }>(request))
+    const body = await readJson<{ userId?: unknown }>(request)
+    await hasilUjianService.batalkanRemedial(id, body)
+    await auditTrailService.log(staff, "Cancel Remedial", `Exam ${id}, student ${String(body.userId)}`)
     return ok({ id })
   } catch (err) {
     return handleError(err)
