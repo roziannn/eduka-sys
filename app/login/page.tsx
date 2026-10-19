@@ -1,58 +1,19 @@
 "use client"
 
 import Image from "next/image"
-import { ClipboardCheck, Timer, ShieldCheck } from "lucide-react"
 import { LoginForm } from "@/components/login-form"
-import { LoginExamScene } from "@/components/login-exam-scene"
-
-const highlights = [
-  { icon: ClipboardCheck, label: "Ujian berbasis komputer" },
-  { icon: Timer, label: "Timer & penilaian otomatis" },
-  { icon: ShieldCheck, label: "Aman & terpantau" },
-]
 
 export default function LoginPage() {
   return (
-    <div className="grid min-h-svh w-full lg:grid-cols-2">
-      {/* Panel kiri: animasi 3D bertema CBT */}
-      <div className="relative hidden overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-800 text-white lg:flex lg:flex-col lg:justify-between lg:p-10">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-20"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
-            backgroundSize: "28px 28px",
-          }}
-        />
-                <div className="relative z-10">
-          <h2 className="text-3xl font-bold leading-tight">
-            Computer Based Test
-          </h2>
-          <p className="mt-2 max-w-sm text-sm text-blue-100">
-            Platform ujian digital untuk sekolah: cepat, jujur, dan hasilnya
-            langsung terekap.
-          </p>
-        </div>
+    <div className="relative flex min-h-svh w-full items-center justify-center overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-100 p-6 dark:from-slate-950 dark:via-blue-950 dark:to-indigo-950">
+      {/* Gradasi dekoratif */}
+      <div className="pointer-events-none absolute -left-24 -top-24 h-96 w-96 rounded-full bg-blue-400/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -right-24 h-[28rem] w-[28rem] rounded-full bg-indigo-400/30 blur-3xl" />
+      <div className="pointer-events-none absolute left-1/2 top-1/3 h-72 w-72 -translate-x-1/2 rounded-full bg-sky-300/20 blur-3xl" />
 
-        <LoginExamScene className="relative z-0 my-4 min-h-0 flex-1" />
-
-        <ul className="relative z-10 flex flex-wrap gap-3">
-          {highlights.map(({ icon: Icon, label }) => (
-            <li
-              key={label}
-              className="flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium backdrop-blur"
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Panel kanan: form */}
-      <div className="relative flex items-center justify-center p-6 md:p-10">
-        <div className="flex w-full max-w-sm flex-col items-center gap-8">
-          <div className="flex items-center justify-center gap-4">
+      <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-6">
+        <div className="w-full rounded-2xl border border-white/60 bg-white/80 p-8 shadow-xl shadow-blue-900/10 backdrop-blur-md dark:border-white/10 dark:bg-slate-900/70">
+          <div className="mb-6 flex items-center justify-center gap-4">
             <Image
               src="/logo/eduka.png"
               alt="Eduka Logo"
@@ -78,14 +39,12 @@ export default function LoginPage() {
             />
           </div>
 
-          <div className="w-full">
-            <LoginForm />
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Eduka. Seluruh hak dilindungi.
-          </p>
+          <LoginForm />
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          © {new Date().getFullYear()} Eduka. Seluruh hak dilindungi.
+        </p>
       </div>
     </div>
   )
