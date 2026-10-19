@@ -90,7 +90,7 @@ export function LoginExamScene({ className }: { className?: string }) {
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100)
-    camera.position.set(0, 0.2, 9)
+    camera.position.set(0, 0, 13)
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -172,25 +172,26 @@ export function LoginExamScene({ className }: { className?: string }) {
     )
     hand.geometry.translate(0, 0.19, 0)
     hand.position.z = 0.03
+    clock.scale.setScalar(0.7)
     clock.add(face, ring, hand)
-    clock.position.set(-2.2, 2.2, 0.7)
+    clock.position.set(-2.1, 2.0, 0.5)
     group.add(clock)
 
     // Gelembung jawaban melayang
     const bubbles: THREE.Mesh[] = []
     const bubbleGeo = new THREE.TorusGeometry(0.16, 0.035, 12, 32)
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 10; i++) {
       const m = new THREE.Mesh(
         bubbleGeo,
         new THREE.MeshBasicMaterial({
           color: i % 3 === 0 ? 0x93c5fd : 0xffffff,
           transparent: true,
-          opacity: 0.55,
+          opacity: 0.3,
         })
       )
       m.position.set(
-        (Math.random() - 0.5) * 9,
-        (Math.random() - 0.5) * 7,
+        (Math.random() - 0.5) * 8,
+        (Math.random() - 0.5) * 5,
         -1 - Math.random() * 3
       )
       m.userData = {
@@ -244,8 +245,8 @@ export function LoginExamScene({ className }: { className?: string }) {
       }
 
       group.position.y = Math.sin(t * 0.9) * 0.12
-      group.rotation.y += (mouse.x * 0.35 - 0.2 - group.rotation.y) * 0.05
-      group.rotation.x += (mouse.y * 0.15 - group.rotation.x) * 0.05
+      group.rotation.y += (mouse.x * 0.15 - 0.1 - group.rotation.y) * 0.05
+      group.rotation.x += (mouse.y * 0.08 - group.rotation.x) * 0.05
       if (!reduceMotion) {
         // pensil "menulis" ke tiap soal
         const qi = Math.min(Math.floor(progress), QUESTION_COUNT - 1)
