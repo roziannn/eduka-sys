@@ -68,6 +68,13 @@ table{width:100%;border-collapse:collapse;font-size:10.5px}td,th{padding:5px 4px
 .hero h1{font-size:36px;font-weight:800;letter-spacing:-1px;color:#0f172a;line-height:1.1}.hero h1 span{color:#2563eb}
 .hero p{font-size:15px;color:#334155;margin-top:8px}
 .tags{position:absolute;right:30px;top:24px;width:600px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.tags span{background:#fff;border:1px solid #cbd5e1;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;color:#334155}
+.xc{border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+.xp{display:inline-block;border:1px solid #e2e8f0;border-radius:99px;padding:2px 9px;font-size:9.5px;font-weight:600;color:#0f172a;margin-left:3px}
+.xo{display:flex;align-items:center;gap:10px;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;margin-bottom:5px;font-size:10.5px;color:#0f172a}
+.xo b{width:22px;height:22px;border-radius:50%;background:#f1f5f9;display:grid;place-items:center;font-size:10px;color:#64748b;flex:none}
+.xo.ok{background:#ecfdf5;border-color:#a7f3d0;color:#047857;font-weight:600}.xo.ok b{background:#059669;color:#fff}
+.xo em{margin-left:auto;font-style:normal;background:#059669;color:#fff;font-size:8.5px;padding:3px 9px;border-radius:99px;font-weight:600}
+.xn{height:24px;border-radius:5px;background:#059669;color:#fff;font-style:normal;font-size:10px;font-weight:700;display:grid;place-items:center}
 </style>
 
 <div class="hero"><div><h1>Eduka <span>LMS &amp; CBT</span> untuk Sekolah</h1><p>Ujian online, penilaian otomatis, e-rapor, dan dashboard real-time dalam satu platform.</p>
@@ -129,18 +136,28 @@ table{width:100%;border-collapse:collapse;font-size:10.5px}td,th{padding:5px 4px
 
 <!-- EXAM -->
 <div class="win" style="left:1030px;top:112px;width:780px;height:455px;transform:scale(.692);transform-origin:top left">
- <div class="bar"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#4ade80"></i><span>eduka.app/masuk-ujian</span></div>
- <div class="exam">
-  <div class="ex-main">
-   <div class="ex-head"><div><h3>Ujian Tengah Semester — Matematika</h3><p>XI IPA 1 · 40 Soal · Durasi 90 menit</p></div><div class="timer">⏱ 01:12:45</div></div>
-   <div class="q"><div class="n">Soal Nomor 12 <span class="pill b">Pilihan Ganda</span></div>
-    <p>Jika f(x) = 2x² − 3x + 1, maka nilai f(3) adalah ...</p>
-    <div class="opt"><b>A</b>10</div><div class="opt on"><b>B</b>12</div><div class="opt"><b>C</b>14</div><div class="opt"><b>D</b>16</div><div class="opt"><b>E</b>18</div></div>
-   <div style="display:flex;justify-content:space-between;margin-top:12px"><div class="pill" style="background:#f1f5f9;color:#475569;padding:8px 18px;font-size:11.5px">← Sebelumnya</div><div class="pill" style="background:#2563eb;color:#fff;padding:8px 18px;font-size:11.5px">Selanjutnya →</div></div>
+ <div class="bar"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#4ade80"></i><span>eduka.app/soal-ujian/preview</span></div>
+ <div style="display:flex;gap:14px;padding:10px 14px;height:calc(100% - 34px);background:#fff;overflow:hidden">
+  <div style="flex:1;min-width:0">
+   <div class="xc" style="padding:12px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="display:flex;gap:10px"><span style="width:26px;height:26px;border:1px solid #e2e8f0;border-radius:7px;display:grid;place-items:center;font-size:12px">←</span><div><b style="font-size:16px;color:#0f172a">UTS Bahasa Indonesia X</b><div style="font-size:10.5px;color:#64748b;margin-top:2px">Mata Pelajaran: <b style="color:#0f172a">Matematika</b></div></div></div><span class="xp">UH</span></div>
+    <div style="display:flex;gap:34px;border-top:1px solid #e2e8f0;margin-top:10px;padding-top:8px;font-size:9.5px;color:#64748b"><div>Target Kelas<br><b style="font-size:11px;color:#0f172a">X IPA 1, X IPA 2, X IPA 3</b></div><div>Tahun Ajaran<br><b style="font-size:11px;color:#0f172a">2025/2026 (Genap)</b></div><div>Durasi Waktu<br><b style="font-size:11px;color:#0f172a">90 Menit</b></div><div>KKM / Total Soal<br><b style="font-size:11px;color:#0f172a">80 / 5 Soal</b></div></div>
+   </div>
+   <div class="xc" style="margin-top:9px;padding:10px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:8px"><div><b style="color:#2563eb;font-size:14px">Soal Nomor 1</b> <span class="xp" style="background:#ecfdf5;color:#059669;border-color:#a7f3d0">✓ Terisi</span></div><div><span class="xp">Pilihan Ganda</span> <span class="xp">1 Jawaban</span> <span class="xp">Bobot: 20</span></div></div>
+    <div style="font-size:11.5px;color:#0f172a;line-height:1.45;margin:8px 0 8px">Perhatikan paragraf berikut!<br><span style="display:block;padding-left:14px;margin-bottom:6px">Penggunaan transportasi umum dapat mengurangi kemacetan di kota-kota besar. Dengan semakin banyak masyarakat menggunakan bus atau kereta api, jumlah kendaraan pribadi di jalan raya dapat berkurang. Selain itu, transportasi umum juga dapat mengurangi polusi udara akibat emisi kendaraan.</span><br>Ide pokok paragraf tersebut adalah ...</div>
+    <div class="xo"><b>A</b>Transportasi umum menyebabkan kemacetan.</div>
+    <div class="xo"><b>B</b>Kendaraan pribadi menghasilkan polusi udara.</div>
+    <div class="xo ok"><b>C</b>Penggunaan transportasi umum dapat mengurangi kemacetan.<em>Kunci Jawaban</em></div>
+    <div class="xo"><b>D</b>Bus dan kereta api merupakan kendaraan umum.</div>
+   </div>
   </div>
-  <div class="nav"><h4>Navigasi Soal</h4><div class="grid">
-   <i class="d">1</i><i class="d">2</i><i class="d">3</i><i class="d">4</i><i class="d">5</i><i class="d">6</i><i class="d">7</i><i>8</i><i class="d">9</i><i class="d">10</i><i class="d">11</i><i class="c">12</i><i>13</i><i>14</i><i>15</i><i>16</i><i>17</i><i>18</i><i>19</i><i>20</i></div>
-   <div class="legend">🟦 Terjawab &nbsp; ⬜ Belum<br>🟧 Sedang dibuka</div><div class="k">Kumpulkan Jawaban</div></div>
+  <div style="width:210px;flex:none">
+   <div class="xc" style="padding:12px 14px"><div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;color:#0f172a"><span>⏱ Sisa Waktu Ujian</span><span class="xp" style="font:9px ui-monospace,monospace">90 Menit</span></div><div style="text-align:center;font:700 26px ui-monospace,monospace;color:#2563eb;margin:12px 0 6px">01:29:51</div><div style="text-align:center;font-size:9px;color:#64748b">Waktu berjalan secara real-time selama simulasi.</div></div>
+   <div class="xc" style="margin-top:12px;padding:12px 14px"><div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;color:#0f172a"><span>Navigasi Soal</span><span style="font-weight:400;color:#64748b;font-size:10px">5 / 5 Terisi</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:9.5px;color:#64748b;margin:10px 0;padding-bottom:8px;border-bottom:1px solid #e2e8f0"><span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#059669;margin-right:5px"></i>Sudah Diisi</span><span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#e2e8f0;margin-right:5px"></i>Belum Diisi</span></div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px"><i class="xn" style="outline:2px solid #2563eb">1</i><i class="xn">2</i><i class="xn">3</i><i class="xn">4</i><i class="xn">5</i></div></div>
+  </div>
  </div>
 </div>
 
