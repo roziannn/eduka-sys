@@ -24,9 +24,7 @@ export default function LoginPage() {
             backgroundSize: "28px 28px",
           }}
         />
-        <LoginExamScene className="absolute inset-0" />
-
-        <div className="relative z-10">
+                <div className="relative z-10">
           <h2 className="text-3xl font-bold leading-tight">
             Computer Based Test
           </h2>
@@ -35,6 +33,8 @@ export default function LoginPage() {
             langsung terekap.
           </p>
         </div>
+
+        <LoginExamScene className="relative z-0 my-4 min-h-0 flex-1" />
 
         <ul className="relative z-10 flex flex-wrap gap-3">
           {highlights.map(({ icon: Icon, label }) => (
