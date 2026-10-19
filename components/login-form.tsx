@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Shield, GraduationCap, UserCheck } from "lucide-react"
+import { Shield, GraduationCap, UserCheck, Eye, EyeOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -43,6 +43,7 @@ export function LoginForm({
   const [selectedRole, setSelectedRole] = React.useState<Role>("TEACHER")
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
+  const [showPassword, setShowPassword] = React.useState(false)
 
   const currentRole =
     roleOptions.find((r) => r.id === selectedRole) ?? roleOptions[0]
@@ -147,7 +148,29 @@ export function LoginForm({
               Forgot your password?
             </a>
           </div>
-          <Input id="password" name="password" type="password" required />
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              className="pr-10"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={
+                showPassword ? "Sembunyikan password" : "Tampilkan password"
+              }
+              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </Field>
 
         <Field>
