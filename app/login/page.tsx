@@ -19,7 +19,7 @@ export default function LoginPage() {
               alt="Eduka Logo"
               width={140}
               height={40}
-              className="h-9 w-auto object-contain"
+              className="h-9 w-auto object-contain dark:[filter:drop-shadow(0_0_1px_#fff)_drop-shadow(0_0_8px_rgba(255,255,255,0.45))]"
               priority
             />
             <div className="h-6 w-[1px] bg-border" />
@@ -28,7 +28,7 @@ export default function LoginPage() {
               alt="Kurikulum Merdeka"
               width={40}
               height={40}
-              className="h-8 w-auto object-contain"
+              className="h-8 w-auto object-contain dark:[filter:drop-shadow(0_0_1px_#fff)_drop-shadow(0_0_8px_rgba(255,255,255,0.45))]"
             />
             <Image
               src="/logo/pendidikan.png"
